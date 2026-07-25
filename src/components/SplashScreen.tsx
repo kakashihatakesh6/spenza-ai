@@ -32,6 +32,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd, isLo
   const dot1Scale = useSharedValue(0.6);
   const dot2Scale = useSharedValue(0.6);
   const dot3Scale = useSharedValue(0.6);
+  const loadingOpacity = useSharedValue(1);
 
   useEffect(() => {
     // 1. Logo Animation (Scale up and fade in)
@@ -100,15 +101,42 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd, isLo
   }, []);
 
   const triggerExit = useCallback(() => {
-    splashOpacity.value = withTiming(0, {
-      duration: 500,
+    // 1. Zoom through: Scale up logo while fading it out
+    logoScale.value = withTiming(2.2, {
+      duration: 650,
+      easing: Easing.out(Easing.cubic),
+    });
+    logoOpacity.value = withTiming(0, {
+      duration: 400,
       easing: Easing.out(Easing.quad),
+    });
+
+    // 2. Slide down and fade out branding text
+    textOpacity.value = withTiming(0, {
+      duration: 350,
+      easing: Easing.out(Easing.quad),
+    });
+    textTranslateY.value = withTiming(40, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    });
+
+    // 3. Fade out loading indicators
+    loadingOpacity.value = withTiming(0, {
+      duration: 250,
+      easing: Easing.out(Easing.quad),
+    });
+
+    // 4. Smoothly fade out the container background
+    splashOpacity.value = withTiming(0, {
+      duration: 650,
+      easing: Easing.inOut(Easing.quad),
     }, (finished) => {
       if (finished) {
         runOnJS(onAnimationEnd)();
       }
     });
-  }, [onAnimationEnd, splashOpacity]);
+  }, [onAnimationEnd, splashOpacity, logoScale, logoOpacity, textOpacity, textTranslateY, loadingOpacity]);
 
   // Monitor loading status to trigger exit transition
   useEffect(() => {
@@ -163,6 +191,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd, isLo
     transform: [{ scale: dot3Scale.value }],
   }));
 
+  const loadingAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: loadingOpacity.value,
+  }));
+
   return (
     <Animated.View style={[styles.container, containerAnimatedStyle]} pointerEvents="none">
       {/* Background Gradient */}
@@ -201,11 +233,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationEnd, isLo
       </View>
 
       {/* Modern Dots Loading Indicator */}
-      <View style={styles.loadingContainer}>
+      <Animated.View style={[styles.loadingContainer, loadingAnimatedStyle]}>
         <Animated.View style={[styles.dot, dot1AnimatedStyle]} />
         <Animated.View style={[styles.dot, dot2AnimatedStyle]} />
         <Animated.View style={[styles.dot, dot3AnimatedStyle]} />
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 };

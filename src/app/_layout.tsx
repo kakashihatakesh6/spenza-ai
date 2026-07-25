@@ -14,10 +14,19 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
+import * as ExpoSplashScreen from 'expo-splash-screen';
+
+// Prevent the native splash screen from auto-hiding before the custom splash screen is mounted
+ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayoutNav() {
   const { colors, theme } = useTheme();
   const [splashVisible, setSplashVisible] = useState(true);
+
+  // Hide the native splash screen once the custom splash overlay has mounted
+  useEffect(() => {
+    ExpoSplashScreen.hideAsync().catch(() => {});
+  }, []);
   
   const fetchSettings = useSettingsStore((state) => state.fetchSettings);
   const fetchExpenses = useExpenseStore((state) => state.fetchExpenses);
