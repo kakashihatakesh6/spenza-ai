@@ -1,5 +1,5 @@
 import '../utils/suppressWarnings';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { initDatabase } from '../database/database';
@@ -10,12 +10,14 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrencyStore } from '../store/currencyStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
+import { SplashScreen } from '../components/SplashScreen';
 
 function RootLayoutNav() {
   const { colors, theme } = useTheme();
+  const [splashVisible, setSplashVisible] = useState(true);
   
   const fetchSettings = useSettingsStore((state) => state.fetchSettings);
   const fetchExpenses = useExpenseStore((state) => state.fetchExpenses);
@@ -98,18 +100,11 @@ function RootLayoutNav() {
     }
   }, [user, authLoading, segments]);
 
-  if (authLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
+      {!authLoading && (
+        <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/register" />
@@ -171,6 +166,13 @@ function RootLayoutNav() {
           }} 
         />
       </Stack>
+      )}
+      {splashVisible && (
+        <SplashScreen
+          onAnimationEnd={() => setSplashVisible(false)}
+          isLoading={authLoading}
+        />
+      )}
     </>
   );
 }
