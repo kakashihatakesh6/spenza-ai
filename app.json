@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "expense",
-    "slug": "expense",
+    "slug": "spendly-ai",
     "newArchEnabled": true,
     "version": "1.0.0",
     "orientation": "portrait",
@@ -44,8 +44,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a2dcf839-8c04-43f2-be3a-9f2f1f7a8b84"
+        "projectId": "6dd49656-4b3c-41d9-8658-c4e12be818a5"
       }
-    }
+    },
+    "owner": "nkdasarnew"
   }
 }
