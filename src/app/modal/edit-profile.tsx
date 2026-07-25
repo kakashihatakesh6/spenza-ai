@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,6 +17,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/Header';
 import { Camera, Check, ArrowLeft, Image as ImageIcon, Sparkles } from 'lucide-react-native';
+import { storageService } from '../../services/storage.service';
 
 const COLOR_PRESETS = [
   { name: 'Indigo Glow', bg: '6366f1', text: 'ffffff' },
@@ -43,6 +44,7 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(user?.user_metadata?.bio || 'Smart Spender 🚀');
   const [avatarUrl, setAvatarUrl] = useState(initialAvatar);
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,20 +86,42 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
+    if (isSaving || isSavingRef.current) return;
+
     if (!username.trim()) {
       Alert.alert('Validation Error', 'Username cannot be empty.');
       return;
     }
     
     try {
+      isSavingRef.current = true;
       setIsSaving(true);
-      await updateProfile(username.trim(), avatarUrl);
+      
+      let finalAvatarUrl = avatarUrl;
+      // If user selected a custom local file, upload it to Supabase storage first
+      if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('https')) {
+        if (user?.id) {
+          try {
+            finalAvatarUrl = await storageService.uploadAvatar(avatarUrl, user.id);
+          } catch (uploadError) {
+            console.error('Failed to upload avatar to Supabase:', uploadError);
+            Alert.alert('Upload Error', 'Failed to upload profile picture to Supabase. Please try again.');
+            setIsSaving(false);
+            isSavingRef.current = false;
+            return;
+          }
+        }
+      }
+
+      await updateProfile(username.trim(), finalAvatarUrl);
       setIsSaving(false);
+      isSavingRef.current = false;
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (err) {
       setIsSaving(false);
+      isSavingRef.current = false;
       console.error(err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     }

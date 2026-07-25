@@ -11,7 +11,6 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/Header';
-import { UserProfileModal } from '../../components/UserProfileModal';
 import {
   Scan,
   Image as ImageIcon,
@@ -25,8 +24,6 @@ export default function AiHubScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
-  
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -38,14 +35,14 @@ export default function AiHubScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
         title="AI SMART HUB"
-        onMenuPress={() => setProfileModalVisible(true)}
+        showBackButton={true}
+        onBackPress={() => router.back()}
         onNotificationPress={() => {
           Alert.alert(
             'Notifications',
             'No new AI processing issues. Cloud nodes and OCR engines are operating at peak efficiency.'
           );
         }}
-        notificationCount={0}
       />
 
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -211,12 +208,6 @@ export default function AiHubScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* User Profile Modal */}
-      <UserProfileModal
-        visible={profileModalVisible}
-        onClose={() => setProfileModalVisible(false)}
-      />
     </View>
   );
 }

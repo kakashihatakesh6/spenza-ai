@@ -348,7 +348,6 @@ export default function Dashboard() {
             'No new spending alerts. All budget parameters are running within optimal limits.'
           );
         }}
-        notificationCount={0}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* 1. Spending Summary Card */}

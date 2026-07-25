@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { useAuthStore } from '../store/authStore';
 import { NotificationSidebar } from './NotificationSidebar';
+import { useNotificationStore } from '../store/notificationStore';
 
 interface HeaderProps {
   title?: string;
@@ -40,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   rightIcon,
   onRightPress,
   onNotificationPress,
-  notificationCount = 2, // Default to showing a notification badge to look active
+  notificationCount,
   hideRightAction = false,
 }) => {
   const insets = useSafeAreaInsets();
@@ -50,6 +51,8 @@ export const Header: React.FC<HeaderProps> = ({
   const user = useAuthStore((state) => state.user);
   const avatarUrl = user?.user_metadata?.avatar_url;
   const username = user?.user_metadata?.username || user?.email?.split('@')[0] || 'User';
+  const unreadCount = useNotificationStore((state) => state.notifications.filter(n => !n.read).length);
+  const badgeCount = notificationCount !== undefined ? notificationCount : unreadCount;
   const initials = username
     .split(' ')
     .map((n: string) => n[0])
@@ -148,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Feather name="bell" size={20} color={colors.text} />
         
         {/* Glowing Red Notification Badge */}
-        {notificationCount > 0 && (
+        {badgeCount > 0 && (
           <View style={[styles.badge, { backgroundColor: colors.danger }]} />
         )}
       </Pressable>

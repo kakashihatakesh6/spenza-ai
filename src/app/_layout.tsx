@@ -10,7 +10,9 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrencyStore } from '../store/currencyStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { useNotificationStore } from '../store/notificationStore';
 
 function RootLayoutNav() {
   const { colors, theme } = useTheme();
@@ -42,6 +44,44 @@ function RootLayoutNav() {
 
     // 3. Initialize Supabase Auth session
     initializeAuth();
+
+    // 4. Load persisted notification history
+    useNotificationStore.getState().loadNotifications();
+
+    if (Platform.OS === 'web') return;
+
+    // 5. Foreground Notification Listener
+    const foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      const { title, body, data } = notification.request.content;
+      const type = (data?.type as any) || 'info';
+      const categoryName = (data?.categoryName as string) || 'ALERT';
+
+      useNotificationStore.getState().addNotification({
+        title: title || 'Notification',
+        message: body || '',
+        type,
+        categoryName,
+      });
+    });
+
+    // 6. Background/Response Notification Listener (when tapped)
+    const backgroundSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const { title, body, data } = response.notification.request.content;
+      const type = (data?.type as any) || 'info';
+      const categoryName = (data?.categoryName as string) || 'ALERT';
+
+      useNotificationStore.getState().addNotification({
+        title: title || 'Notification',
+        message: body || '',
+        type,
+        categoryName,
+      });
+    });
+
+    return () => {
+      foregroundSubscription.remove();
+      backgroundSubscription.remove();
+    };
   }, []);
 
   useEffect(() => {

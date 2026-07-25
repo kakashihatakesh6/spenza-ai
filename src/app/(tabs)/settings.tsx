@@ -231,6 +231,7 @@ export default function SettingsScreen() {
             <ProfileCard
               email={email}
               username={username}
+              avatarUrl={user?.user_metadata?.avatar_url}
               onEditPress={() => router.push('/modal/edit-profile')}
               onSubscriptionPress={() => router.push('/modal/subscription')}
               onSecurityPress={() => router.push('/modal/security')}

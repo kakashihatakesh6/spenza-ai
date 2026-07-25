@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { Header } from './Header';
+import { useNotificationStore } from '../store/notificationStore';
 import {
   AlertTriangle,
   CheckCircle,
@@ -72,58 +73,10 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
     });
   };
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: '1',
-      title: 'Budget Alert: Dining Out',
-      message: 'You have spent 87% of your dining budget. Cook at home to save $24 this weekend.',
-      type: 'warning',
-      categoryName: 'BUDGET',
-      time: '25 mins ago',
-      read: false,
-    },
-    {
-      id: '2',
-      title: 'Receipt Scanned Successfully',
-      message: 'Gemini parsed Starbucks receipt of $14.20. Category: Cafe.',
-      type: 'success',
-      categoryName: 'AI SCAN',
-      time: '2 hours ago',
-      read: false,
-    },
-    {
-      id: '3',
-      title: 'Security Alert: New Sign-In',
-      message: 'New sign-in recorded from macOS Chrome in Mumbai, India.',
-      type: 'security',
-      categoryName: 'SECURITY',
-      time: 'Yesterday',
-      read: true,
-    },
-    {
-      id: '4',
-      title: 'AI Smart Recommendation',
-      message: 'Cancel 1 unused streaming plan to save $12/month based on your history.',
-      type: 'info',
-      categoryName: 'INSIGHT',
-      time: '2 days ago',
-      read: true,
-    },
-  ]);
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const clearAll = () => {
-    setNotifications([]);
-  };
-
-  const toggleRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: !n.read } : n))
-    );
-  };
+  const notifications = useNotificationStore((state) => state.notifications);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+  const clearAll = useNotificationStore((state) => state.clearAll);
+  const toggleRead = useNotificationStore((state) => state.toggleRead);
 
   const filteredNotifications = notifications.filter(n => {
     if (filter === 'unread') return !n.read;

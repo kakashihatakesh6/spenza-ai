@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { SettingsCard } from './SettingsCard';
@@ -8,6 +8,7 @@ import { SettingsRow } from './SettingsRow';
 interface ProfileCardProps {
   email: string;
   username: string;
+  avatarUrl?: string;
   onEditPress?: () => void;
   onSubscriptionPress?: () => void;
   onSecurityPress?: () => void;
@@ -17,6 +18,7 @@ interface ProfileCardProps {
 export const ProfileCard: React.FC<ProfileCardProps> = React.memo(({
   email,
   username,
+  avatarUrl,
   onEditPress,
   onSubscriptionPress,
   onSecurityPress,
@@ -27,9 +29,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = React.memo(({
   return (
     <SettingsCard>
       <View style={styles.profileHeader}>
-        <View style={[styles.avatar, { backgroundColor: colors.primaryLight }]}>
-          <Text style={[styles.avatarText, { color: colors.primary }]}>{initials}</Text>
-        </View>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>{initials}</Text>
+          </View>
+        )}
         
         <View style={styles.profileInfo}>
           <Text style={[styles.usernameText, { color: colors.text }]} numberOfLines={1}>{username}</Text>
