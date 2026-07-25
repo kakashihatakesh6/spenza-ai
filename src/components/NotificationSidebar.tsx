@@ -9,10 +9,12 @@ import {
   Platform,
   Animated,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
-import { Header } from './Header';
 import { useNotificationStore } from '../store/notificationStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import {
   AlertTriangle,
   CheckCircle,
@@ -46,6 +48,7 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
   onClose,
 }) => {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   
   // Animation setup: Start offscreen to the right (screenWidth)
@@ -138,12 +141,41 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
           ]}
         >
           {/* Header matching main screen header */}
-          <Header
-            title="NOTIFICATIONS"
-            showBackButton={true}
-            onBackPress={handleClose}
-            hideRightAction={true}
-          />
+          <View
+            style={[
+              styles.headerContainer,
+              {
+                paddingTop: insets.top + 8,
+                height: 65 + insets.top,
+                backgroundColor: colors.card,
+                borderBottomColor: colors.border,
+              },
+            ]}
+          >
+            {/* Title Container (Absolutely Centered) */}
+            <View style={[styles.headerTitleContainer, { top: insets.top }]}>
+              <Text style={[styles.headerTitleText, { color: colors.text }]}>NOTIFICATIONS</Text>
+            </View>
+
+            {/* Left Action Button (Back Button) */}
+            <View style={styles.headerActionWrapper}>
+              <Pressable
+                onPress={handleClose}
+                style={({ pressed }) => [
+                  styles.headerBackButton,
+                  { backgroundColor: isDark ? '#1E293B' : '#F3F4F6' },
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Feather name="chevron-left" size={24} color={colors.text} style={{ marginRight: 2 }} />
+              </Pressable>
+            </View>
+
+            {/* Right Action Button (Placeholder to keep layout balanced) */}
+            <View style={styles.headerActionWrapper}>
+              <View style={styles.headerPlaceholder} />
+            </View>
+          </View>
 
           {/* Filter Selection Panel */}
           {notifications.length > 0 && (
@@ -450,5 +482,67 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  headerTitleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  headerTitleText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  headerActionWrapper: {
+    zIndex: 2,
+  },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  buttonPressed: {
+    opacity: 0.7,
+  },
+  headerPlaceholder: {
+    width: 40,
+    height: 40,
   },
 });
