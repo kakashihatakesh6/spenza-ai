@@ -104,8 +104,11 @@ function RootLayoutNav() {
       // Redirect to login if not authenticated and not in auth screens
       router.replace('/auth/login');
     } else if (user && inAuthGroup) {
-      // Redirect to dashboard if authenticated but in auth screens
-      router.replace('/(tabs)');
+      // Redirect to dashboard if authenticated but in auth screens (except when resetting password on forgot-password screen)
+      const isForgotPasswordScreen = segments[1] === 'forgot-password' || segments[1] === 'reset-password';
+      if (!isForgotPasswordScreen) {
+        router.replace('/(tabs)');
+      }
     }
   }, [user, authLoading, segments]);
 
@@ -118,6 +121,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/register" />
         <Stack.Screen name="auth/forgot-password" />
+        <Stack.Screen name="auth/reset-password" />
         
         <Stack.Screen 
           name="modal/add-expense" 

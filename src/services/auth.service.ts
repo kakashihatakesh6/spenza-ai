@@ -78,6 +78,26 @@ export const authService = {
     return this.sendPasswordResetEmail(email);
   },
 
+  // Verify OTP for Password Reset
+  async verifyResetOtp(email: string, token: string) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  // Update Current User Password
+  async updatePassword(password: string) {
+    const { data, error } = await supabase.auth.updateUser({
+      password,
+    });
+    if (error) throw error;
+    return data;
+  },
+
   // Check Current Session
   async getSession() {
     const { data, error } = await supabase.auth.getSession();
