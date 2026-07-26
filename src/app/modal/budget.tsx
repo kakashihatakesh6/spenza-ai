@@ -36,7 +36,7 @@ export default function BudgetModal() {
   const [limitAmount, setLimitAmount] = useState('');
   const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
     const parsedAmount = parseFloat(limitAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please set a positive budget limit.');
@@ -44,15 +44,19 @@ export default function BudgetModal() {
     }
 
     const budgetId = `${selectedCategory.toLowerCase()}_${period}`;
-    saveBudget({
-      id: budgetId,
-      category: selectedCategory,
-      amount: parsedAmount,
-      period,
-    });
+    try {
+      await saveBudget({
+        id: budgetId,
+        category: selectedCategory,
+        amount: parsedAmount,
+        period,
+      });
 
-    setLimitAmount('');
-    Alert.alert('Success', `Spending limit set for ${selectedCategory}!`);
+      setLimitAmount('');
+      Alert.alert('Success', `Spending limit set for ${selectedCategory}!`);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to save budget.');
+    }
   };
 
   const handleDeleteBudget = (id: string, name: string) => {
@@ -64,8 +68,12 @@ export default function BudgetModal() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            deleteBudget(id);
+          onPress: async () => {
+            try {
+              await deleteBudget(id);
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete budget.');
+            }
           },
         },
       ]

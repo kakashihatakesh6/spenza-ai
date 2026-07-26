@@ -191,7 +191,7 @@ export default function Dashboard() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Seed Data',
-          onPress: () => {
+          onPress: async () => {
             const today = new Date().toISOString().split('T')[0];
             const getPastDate = (daysAgo: number) => {
               const d = new Date();
@@ -200,7 +200,7 @@ export default function Dashboard() {
             };
 
              // Seed budget
-            saveBudget({
+            await saveBudget({
               id: 'all_monthly',
               category: 'All',
               amount: 1200,
@@ -208,7 +208,7 @@ export default function Dashboard() {
             });
  
              // Seed category budgets
-             saveBudget({
+             await saveBudget({
               id: 'food_monthly',
               category: 'Food',
               amount: 300,

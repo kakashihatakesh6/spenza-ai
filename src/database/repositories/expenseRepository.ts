@@ -147,62 +147,21 @@ export const expenseRepository = {
 
   // --- Budgets ---
   getAllBudgets(): Budget[] {
-    if (Platform.OS === 'web') {
-      const data = localStorage.getItem('web_budgets');
-      return data ? JSON.parse(data) : [];
-    }
-
-    const db = getDatabase();
-    if (!db) return [];
-    return db.getAllSync<Budget>('SELECT * FROM budgets;');
+    // Budget should not be loaded from local storage (localStorage or SQLite). Persisted using Supabase.
+    return [];
   },
 
   saveBudget(budget: Budget): void {
-    if (Platform.OS === 'web') {
-      const list = this.getAllBudgets();
-      const index = list.findIndex((b) => b.id === budget.id);
-      if (index > -1) {
-        list[index] = budget;
-      } else {
-        list.push(budget);
-      }
-      localStorage.setItem('web_budgets', JSON.stringify(list));
-      return;
-    }
-
-    const db = getDatabase();
-    if (!db) return;
-    const existing = db.getFirstSync<Budget>('SELECT * FROM budgets WHERE id = ?;', [budget.id]);
-    if (existing) {
-      db.runSync(
-        'UPDATE budgets SET category = ?, amount = ?, period = ? WHERE id = ?;',
-        [budget.category, budget.amount, budget.period, budget.id]
-      );
-    } else {
-      db.runSync(
-        'INSERT INTO budgets (id, category, amount, period) VALUES (?, ?, ?, ?);',
-        [budget.id, budget.category, budget.amount, budget.period]
-      );
-    }
+    // Budget should not be saved in local storage (localStorage or SQLite). Persisted using Supabase.
   },
 
   deleteBudget(id: string): void {
-    if (Platform.OS === 'web') {
-      const list = this.getAllBudgets();
-      const filtered = list.filter((b) => b.id !== id);
-      localStorage.setItem('web_budgets', JSON.stringify(filtered));
-      return;
-    }
-
-    const db = getDatabase();
-    if (!db) return;
-    db.runSync('DELETE FROM budgets WHERE id = ?;', [id]);
+    // Budget should not be saved in local storage (localStorage or SQLite). Persisted using Supabase.
   },
 
   // --- Settings ---
   getSettings(): Settings {
-    const defaultKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                       process.env.GEMINI_API_KEY;
+    const defaultKey = process.env.GEMINI_API_KEY || '';
     if (Platform.OS === 'web') {
       const data = localStorage.getItem('web_settings');
       const settingsMap = data ? JSON.parse(data) : {};

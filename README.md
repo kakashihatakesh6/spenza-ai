@@ -155,13 +155,12 @@ The project uses `.env` configuration files to hook up remote OCR and databases 
 
 | Variable | Description | Required |
 | :--- | :--- | :--- |
-| `EXPO_PUBLIC_GEMINI_API_KEY` | Google Gemini API key used to process cloud receipt images. | Yes (for OCR) |
-| `GEMINI_API_KEY` | Server-side Gemini API key fallback. | Yes (for OCR) |
+| `GEMINI_API_KEY` | Google Gemini API key used to process cloud receipt images. | Yes (for OCR) |
 | `EXPO_PUBLIC_SUPABASE_URL` | Your Supabase database endpoint URL. | Yes |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase public anonymous API key. | Yes |
 
 > [!NOTE]
-> For local development, if no `EXPO_PUBLIC_GEMINI_API_KEY` is provided, the application will fallback to simulated OCR results for preset files (`starbucks_receipt.png`, `walmart_receipt.png`, etc.) without hitting the cloud API.
+> For local development, if no `GEMINI_API_KEY` is provided, the application will fallback to simulated OCR results for preset files (`starbucks_receipt.png`, `walmart_receipt.png`, etc.) without hitting the cloud API.
 
 ---
 

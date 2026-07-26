@@ -1,9 +1,11 @@
 import { create } from 'zustand';
+import { Alert } from 'react-native';
 import { Expense, Category, Budget } from '../types';
 import { expenseRepository } from '../database/repositories/expenseRepository';
 import { useAuthStore } from './authStore';
 import { dbService } from '../services/expense.service';
 import { storageService } from '../services/storage.service';
+import { budgetService } from '../services/budget.service';
 
 interface ExpenseState {
   expenses: Expense[];
@@ -13,14 +15,14 @@ interface ExpenseState {
   
   fetchExpenses: () => Promise<void>;
   fetchCategories: () => void;
-  fetchBudgets: () => void;
+  fetchBudgets: () => Promise<void>;
   
   addExpense: (expenseData: Omit<Expense, 'createdAt' | 'updatedAt' | 'isSynced'>) => Promise<void>;
   updateExpense: (expense: Expense) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   
-  saveBudget: (budget: Budget) => void;
-  deleteBudget: (id: string) => void;
+  saveBudget: (budget: Budget) => Promise<void>;
+  deleteBudget: (id: string) => Promise<void>;
 }
 
 export const useExpenseStore = create<ExpenseState>((set, get) => ({
@@ -68,12 +70,18 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
     }
   },
 
-  fetchBudgets: () => {
+  fetchBudgets: async () => {
+    set({ isLoading: true });
     try {
-      const budgets = expenseRepository.getAllBudgets();
-      set({ budgets });
-    } catch (error) {
-      console.error('Error fetching budgets from DB:', error);
+      const user = useAuthStore.getState().user;
+      if (user) {
+        const remoteBudgets = await budgetService.getBudgets();
+        set({ budgets: remoteBudgets, isLoading: false });
+      } else {
+        set({ budgets: [], isLoading: false });
+      }
+    } catch (error: any) {
+      set({ budgets: [], isLoading: false });
     }
   },
 
@@ -183,33 +191,39 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
     }
   },
 
-  saveBudget: (budget) => {
+  saveBudget: async (budget) => {
     try {
-      expenseRepository.saveBudget(budget);
-      
-      set((state) => {
-        const index = state.budgets.findIndex((b) => b.id === budget.id);
-        if (index > -1) {
-          const updatedBudgets = [...state.budgets];
-          updatedBudgets[index] = budget;
-          return { budgets: updatedBudgets };
-        } else {
-          return { budgets: [...state.budgets, budget] };
-        }
-      });
-    } catch (error) {
-      console.error('Error saving budget to DB:', error);
+      const user = useAuthStore.getState().user;
+      if (user) {
+        const remoteBudget = await budgetService.saveBudget(budget, user.id);
+        
+        set((state) => {
+          const index = state.budgets.findIndex((b) => b.id === budget.id);
+          if (index > -1) {
+            const updatedBudgets = [...state.budgets];
+            updatedBudgets[index] = remoteBudget;
+            return { budgets: updatedBudgets };
+          } else {
+            return { budgets: [...state.budgets, remoteBudget] };
+          }
+        });
+      }
+    } catch (error: any) {
+      throw error;
     }
   },
 
-  deleteBudget: (id) => {
+  deleteBudget: async (id) => {
     try {
-      expenseRepository.deleteBudget(id);
-      set((state) => ({
-        budgets: state.budgets.filter((b) => b.id !== id),
-      }));
-    } catch (error) {
-      console.error('Error deleting budget from DB:', error);
+      const user = useAuthStore.getState().user;
+      if (user) {
+        await budgetService.deleteBudget(id);
+        set((state) => ({
+          budgets: state.budgets.filter((b) => b.id !== id),
+        }));
+      }
+    } catch (error: any) {
+      throw error;
     }
   },
 }));

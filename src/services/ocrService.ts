@@ -65,8 +65,7 @@ export const ocrService = {
    */
   async extractReceipt(imageUri: string, typePreset?: string): Promise<OcrResult> {
     const settings = useSettingsStore.getState().settings;
-    const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                      process.env.GEMINI_API_KEY ||
+    const rawApiKey = process.env.GEMINI_API_KEY ||
                       settings.geminiApiKey;
     const apiKey = rawApiKey ? rawApiKey.trim() : '';
 

@@ -23,8 +23,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     notificationsEnabled: true,
     ocrEngine: 'mock',
     aiCategorizationEnabled: true,
-    geminiApiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                  process.env.GEMINI_API_KEY,
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
     notificationHour: 20,
     notificationMinute: 0,
     budgetWarningEnabled: true,
