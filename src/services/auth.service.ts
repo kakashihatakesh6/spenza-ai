@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 
 // Allow OAuth redirects to be completed
 WebBrowser.maybeCompleteAuthSession();
@@ -29,6 +30,22 @@ export const authService = {
   // Google Sign-In (OAuth Flow via expo-web-browser)
   async signInWithGoogle() {
     const redirectUrl = Linking.createURL('auth/callback');
+    console.log('====================================');
+    console.log('Supabase OAuth Redirect URL:', redirectUrl);
+    console.log('====================================');
+
+    // On Web platforms, redirect the window directly
+    if (Platform.OS === 'web') {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      if (error) throw error;
+      return data;
+    }
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -42,20 +59,41 @@ export const authService = {
     if (data?.url) {
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
       if (result.type === 'success' && result.url) {
-        const { queryParams } = Linking.parse(result.url);
-        const { access_token, refresh_token } = queryParams || {};
+        // Supabase returns tokens in the URL hash fragment (e.g., #access_token=xxx&refresh_token=yyy) or 'code' (PKCE).
+        // We convert '#' to '?' so Linking.parse can parse them as query parameters.
+        const urlToParse = result.url.includes('#') ? result.url.replace('#', '?') : result.url;
+        const { queryParams } = Linking.parse(urlToParse);
+        const { access_token, refresh_token, code } = queryParams || {};
         
-        if (access_token && refresh_token) {
+        if (code) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
+          if (sessionError) throw sessionError;
+          return sessionData;
+        } else if (access_token && refresh_token) {
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: access_token as string,
             refresh_token: refresh_token as string,
           });
           if (sessionError) throw sessionError;
           return sessionData;
+        } else {
+          throw new Error('Authentication tokens or authorization code were not found in the response.');
         }
       }
     }
     return null;
+  },
+
+  // Google Sign-In with ID Token (from expo-auth-session)
+  async signInWithGoogleIdToken(idToken: string, accessToken?: string, nonce?: string) {
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+      access_token: accessToken,
+      nonce,
+    });
+    if (error) throw error;
+    return data;
   },
 
   // Logout

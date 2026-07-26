@@ -122,6 +122,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/register" />
         <Stack.Screen name="auth/forgot-password" />
         <Stack.Screen name="auth/reset-password" />
+        <Stack.Screen name="auth/callback" />
         
         <Stack.Screen 
           name="modal/add-expense" 

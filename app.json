@@ -6,10 +6,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "expense",
+    "scheme": "spendly",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.nkdasarnew.spendly"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +20,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nkexpo.expense"
+      "package": "com.nkdasarnew.spendly"
     },
     "web": {
       "output": "static",
@@ -30,6 +31,9 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
           "backgroundColor": "#0B0F19"
         }
       ],
