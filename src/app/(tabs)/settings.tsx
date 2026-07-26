@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,8 @@ import {
   TextInput,
   TouchableOpacity,
   Switch,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +35,9 @@ export default function SettingsScreen() {
   const navigation = useNavigation();
   const { colors, theme, isDark } = useTheme();
 
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
   useEffect(() => {
     navigation.setOptions({
       headerShown: false,
@@ -57,26 +62,12 @@ export default function SettingsScreen() {
   const { expenses } = useExpenseStore();
 
   const handleLogout = useCallback(() => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of your account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-          }
-        }
-      ]
-    );
-  }, [signOut]);
+    setLogoutModalVisible(true);
+  }, []);
 
   const handleThemeChange = useCallback(() => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-  }, [theme, setTheme]);
+    setThemeModalVisible(true);
+  }, []);
 
   const selectCurrency = useCallback(() => {
     Alert.alert(
@@ -204,6 +195,181 @@ export default function SettingsScreen() {
   const nestedTitleStyle = [styles.nestedTitle, { color: colors.text }];
   const helpTextStyle = [styles.helpText, { color: colors.textSecondary }];
   const digitLabelStyle = [styles.digitLabel, { color: colors.textSecondary }];
+
+  const renderThemeModal = () => {
+    const themes = [
+      {
+        id: 'system',
+        name: 'Follow Device (System)',
+        desc: 'Sync app appearance with your phone system settings',
+        icon: 'phone-portrait-outline' as const,
+        iconBg: '#EFF6FF',
+        iconColor: '#3B82F6',
+      },
+      {
+        id: 'light',
+        name: 'Light Mode',
+        desc: 'A bright, clean appearance for daylight environments',
+        icon: 'sunny-outline' as const,
+        iconBg: '#FEF3C7',
+        iconColor: '#D97706',
+      },
+      {
+        id: 'dark',
+        name: 'Dark Mode',
+        desc: 'Sleek, low-light appearance that is easy on the eyes',
+        icon: 'moon-outline' as const,
+        iconBg: '#ECEFEE',
+        iconColor: '#6366F1',
+      },
+    ];
+
+    return (
+      <Modal
+        visible={themeModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setThemeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setThemeModalVisible(false)} />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+                borderColor: isDark ? '#1F293D' : '#E5E7EB',
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleContainer}>
+                <Ionicons name="color-palette-outline" size={22} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Choose App Theme</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setThemeModalVisible(false)}
+                style={[styles.modalCloseBtn, { backgroundColor: isDark ? '#1F293D' : '#F3F4F6' }]}
+              >
+                <Ionicons name="close" size={18} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              Customize Spendly's visual appearance to match your style or reduce eye strain.
+            </Text>
+
+            <View style={styles.optionsList}>
+              {themes.map((t) => {
+                const isSelected = settings.theme === t.id;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => {
+                      setTheme(t.id as 'light' | 'dark' | 'system');
+                      setThemeModalVisible(false);
+                    }}
+                    style={[
+                      styles.optionItem,
+                      {
+                        backgroundColor: isDark ? '#151D30' : '#F8FAFC',
+                        borderColor: isSelected ? colors.primary : (isDark ? '#1F293D' : '#E2E8F0'),
+                        borderWidth: isSelected ? 2 : 1,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.optionIconContainer, { backgroundColor: isDark ? '#0B0F19' : t.iconBg }]}>
+                      <Ionicons name={t.icon} size={20} color={isDark ? '#818CF8' : t.iconColor} />
+                    </View>
+                    <View style={styles.optionDetails}>
+                      <Text style={[styles.optionName, { color: colors.text }]}>{t.name}</Text>
+                      <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>{t.desc}</Text>
+                    </View>
+                    {isSelected && (
+                      <View style={[styles.checkmarkCircle, { backgroundColor: colors.primary }]}>
+                        <Ionicons name="checkmark" size={12} color="#FFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderLogoutModal = () => {
+    return (
+      <Modal
+        visible={logoutModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setLogoutModalVisible(false)} />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+                borderColor: isDark ? '#1F293D' : '#E5E7EB',
+                alignItems: 'center',
+                paddingTop: 32,
+              },
+            ]}
+          >
+            <View style={[styles.logoutIconContainer, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEE2E2' }]}>
+              <Ionicons name="log-out" size={32} color="#EF4444" />
+            </View>
+
+            <Text style={[styles.logoutTitle, { color: colors.text }]}>Sign Out of Spendly?</Text>
+            
+            <Text style={[styles.logoutDesc, { color: colors.textSecondary }]}>
+              Are you sure you want to sign out of your account? You will need to log back in to sync your expenses and budgets.
+            </Text>
+
+            <View style={styles.logoutActions}>
+              <TouchableOpacity
+                onPress={() => setLogoutModalVisible(false)}
+                style={[
+                  styles.btnCancel,
+                  {
+                    backgroundColor: isDark ? '#151D30' : '#F3F4F6',
+                    borderColor: isDark ? '#1F293D' : '#E2E8F0',
+                  },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.btnCancelText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setLogoutModalVisible(false);
+                  await signOut();
+                }}
+                style={[
+                  styles.btnConfirm,
+                  {
+                    backgroundColor: '#EF4444',
+                    shadowColor: '#EF4444',
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnConfirmText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const clockColonStyle = [styles.clockColon, { color: colors.textSecondary }];
   const apiKeyLabelStyle = [styles.apiKeyLabel, { color: colors.textSecondary }];
 
@@ -288,15 +454,19 @@ export default function SettingsScreen() {
           
           <View style={dividerStyle} />
           
-          <ToggleRow
+          <SettingsRow
             icon="moon-outline"
             iconBg="#FEF9C3"
             iconColor="#CA8A04"
             title="Dark Mode / App Theme"
-            subtitle={theme === 'dark' ? 'Dark theme active' : 'Light theme active'}
-            value={theme === 'dark'}
-            onValueChange={handleThemeChange}
-            activeTrackColor={colors.primary}
+            subtitle={
+              settings.theme === 'system'
+                ? 'Follow Device (System)'
+                : settings.theme === 'dark'
+                ? 'Dark theme active'
+                : 'Light theme active'
+            }
+            onPress={handleThemeChange}
           />
 
           {settings.notificationsEnabled && (
@@ -583,6 +753,9 @@ export default function SettingsScreen() {
           <SignOutButton onPress={handleLogout} />
         </View>
       </ScrollView>
+
+      {renderThemeModal()}
+      {renderLogoutModal()}
     </View>
   );
 }
@@ -744,5 +917,146 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 12,
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  optionsList: {
+    gap: 12,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  optionDetails: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  optionName: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  optionDesc: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  checkmarkCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoutTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  logoutDesc: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  logoutActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  btnCancel: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  btnCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  btnConfirm: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  btnConfirmText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
