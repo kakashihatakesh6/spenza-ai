@@ -61,7 +61,7 @@ export default function SubscriptionScreen() {
       
       // Update store state with is_pro metadata
       const username = user?.user_metadata?.username || user?.email?.split('@')[0] || 'User';
-      const avatarUrl = user?.user_metadata?.avatar_url || '';
+      const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '';
       
       // If already Pro, this toggles it back to Free (cancelling plan)
       await updateProfile(username, avatarUrl, { is_pro: !isPro });

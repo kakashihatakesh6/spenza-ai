@@ -37,7 +37,7 @@ export default function EditProfileScreen() {
   const updateProfile = useAuthStore((state) => state.updateProfile);
 
   const initialUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || '';
-  const initialAvatar = user?.user_metadata?.avatar_url || '';
+  const initialAvatar = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '';
 
   const [username, setUsername] = useState(initialUsername);
   const [email, setEmail] = useState(user?.email || '');

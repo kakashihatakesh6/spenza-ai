@@ -127,8 +127,6 @@ export default function AnalyticsScreen() {
   }, [timePeriod, expenses]);
 
   const renderTrendChart = () => {
-    if (expenses.length === 0) return null;
-
     const dataValues = chartData.map((d) => d.amount);
     const maxVal = Math.max(...dataValues, 100); // minimum scale of 100
     
@@ -206,7 +204,16 @@ export default function AnalyticsScreen() {
     );
   };
 
-  const categorySpending = expenseHelpers.getCategorySpending(expenses, categories);
+  let categorySpending = expenseHelpers.getCategorySpending(expenses, categories);
+  if (categorySpending.length === 0) {
+    categorySpending = categories.map((cat) => ({
+      name: cat.name,
+      amount: 0,
+      percentage: 0,
+      color: cat.color || '#C7C7CC',
+      icon: cat.icon || 'dots-horizontal',
+    }));
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -220,15 +227,6 @@ export default function AnalyticsScreen() {
         }}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {expenses.length === 0 ? (
-        <View style={{ marginTop: 60 }}>
-          <EmptyState
-            icon={TrendingUp}
-            title="No Analytics Available"
-            description="Add some expenses on the Dashboard or Transactions page to view detailed charts and statistics here."
-          />
-        </View>
-      ) : (
         <View style={styles.content}>
           {/* Chart Period Selector */}
           <View style={styles.headerRow}>
@@ -321,27 +319,23 @@ export default function AnalyticsScreen() {
               <Text style={[styles.cardVal, { color: colors.text }]} numberOfLines={1}>
                 {highestSpendingDay
                   ? `${expenseHelpers.getCurrencySymbol(settings.currency)}${highestSpendingDay.amount.toFixed(0)}`
-                  : 'N/A'}
+                  : `${expenseHelpers.getCurrencySymbol(settings.currency)}0`}
               </Text>
-              {highestSpendingDay && (
-                <Text style={[styles.gridCardSub, { color: colors.textSecondary }]}>
-                  {highestSpendingDay.date}
-                </Text>
-              )}
+              <Text style={[styles.gridCardSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                {highestSpendingDay ? highestSpendingDay.date : 'No spend days'}
+              </Text>
             </Card>
 
             <Card style={styles.gridCard}>
               <Sparkles size={20} color={colors.primary} />
               <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Top Merchant</Text>
               <Text style={[styles.cardVal, { color: colors.text }]} numberOfLines={1}>
-                {topMerchants.length > 0 ? topMerchants[0].merchant : 'N/A'}
+                {topMerchants.length > 0 ? topMerchants[0].merchant : 'None'}
               </Text>
-              {topMerchants.length > 0 && (
-                <Text style={[styles.gridCardSub, { color: colors.textSecondary }]}>
-                  Spent {expenseHelpers.getCurrencySymbol(settings.currency)}
-                  {topMerchants[0].total.toFixed(0)}
-                </Text>
-              )}
+              <Text style={[styles.gridCardSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                Spent {expenseHelpers.getCurrencySymbol(settings.currency)}
+                {topMerchants.length > 0 ? topMerchants[0].total.toFixed(0) : '0'}
+              </Text>
             </Card>
           </View>
 
@@ -374,7 +368,6 @@ export default function AnalyticsScreen() {
           </Card>
           <View style={{ height: 40 }} />
         </View>
-      )}
     </ScrollView>
     </View>
   );

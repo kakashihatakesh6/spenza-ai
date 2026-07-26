@@ -486,14 +486,23 @@ export default function Dashboard() {
       </View>
 
       {recentExpenses.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            icon={Compass}
-            title="No Transactions Logged"
-            description="You have not added any transactions yet. Populate the app with sample data to preview the full layout."
-            actionLabel="Seed Sample Data"
-            onAction={seedSampleData}
-          />
+        <View style={[
+          styles.emptyContainer, 
+          { 
+            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.01)', 
+            borderColor: colors.border, 
+            borderWidth: 1, 
+            borderStyle: 'dashed', 
+            borderRadius: 16,
+            height: 100,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+          }
+        ]}>
+          <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+            No transactions yet
+          </Text>
         </View>
       ) : (
         <View style={styles.recentList}>

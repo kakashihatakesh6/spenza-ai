@@ -60,7 +60,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     .join('')
     .toUpperCase() || 'US';
 
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url;
   const isPro = !!user?.user_metadata?.is_pro;
 
   const handleSignOut = () => {

@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
   const user = useAuthStore((state) => state.user);
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const avatarUrl = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url;
   const username = user?.user_metadata?.username || user?.email?.split('@')[0] || 'User';
   const unreadCount = useNotificationStore((state) => state.notifications.filter(n => !n.read).length);
   const badgeCount = notificationCount !== undefined ? notificationCount : unreadCount;

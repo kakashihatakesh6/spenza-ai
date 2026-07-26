@@ -51,7 +51,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       // Try to update Supabase if online
       const { data, error } = await supabase.auth.updateUser({
-        data: { username, avatar_url: avatarUrl, ...extraMetadata }
+        data: { 
+          username, 
+          avatar_url: avatarUrl, 
+          custom_avatar_url: avatarUrl, 
+          ...extraMetadata 
+        }
       });
       if (error) {
         console.warn('Supabase update failed or offline. Updating store state locally.', error);
@@ -72,6 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
               ...currentUser.user_metadata,
               username,
               avatar_url: avatarUrl,
+              custom_avatar_url: avatarUrl,
               ...extraMetadata,
             }
           }
