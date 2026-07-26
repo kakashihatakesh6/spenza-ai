@@ -15,6 +15,7 @@ import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
 import * as ExpoSplashScreen from 'expo-splash-screen';
+import { CustomAlertModal } from '../components/CustomAlertModal';
 
 // Prevent the native splash screen from auto-hiding before the custom splash screen is mounted
 ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
@@ -187,6 +188,7 @@ function RootLayoutNav() {
           isLoading={authLoading}
         />
       )}
+      <CustomAlertModal />
     </>
   );
 }

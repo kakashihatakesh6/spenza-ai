@@ -13,6 +13,7 @@ import { useRouter, useNavigation } from 'expo-router';
 import { Header } from '../../components/Header';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useAlertStore } from '../../store/alertStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Card } from '../../components/Card';
 import { Plus, Trash, Check, Settings } from 'lucide-react-native';
@@ -39,7 +40,7 @@ export default function BudgetModal() {
   const handleSaveBudget = async () => {
     const parsedAmount = parseFloat(limitAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a positive budget limit.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a positive budget limit.', 'warning');
       return;
     }
 
@@ -53,16 +54,17 @@ export default function BudgetModal() {
       });
 
       setLimitAmount('');
-      Alert.alert('Success', `Spending limit set for ${selectedCategory}!`);
+      useAlertStore.getState().showAlert('Success', `Spending limit set for ${selectedCategory}!`, 'success');
     } catch (err) {
-      Alert.alert('Error', 'Failed to save budget.');
+      useAlertStore.getState().showAlert('Error', 'Failed to save budget.', 'error');
     }
   };
 
   const handleDeleteBudget = (id: string, name: string) => {
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Delete Budget',
       `Are you sure you want to delete the spending limit for ${name}?`,
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -72,7 +74,7 @@ export default function BudgetModal() {
             try {
               await deleteBudget(id);
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete budget.');
+              useAlertStore.getState().showAlert('Error', 'Failed to delete budget.', 'error');
             }
           },
         },

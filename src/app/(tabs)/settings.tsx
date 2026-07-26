@@ -17,6 +17,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { exportService } from '../../services/exportService';
 import { notificationService } from '../../services/notificationService';
 import { expenseHelpers } from '../../utils/expenseHelpers';
@@ -381,7 +382,7 @@ export default function SettingsScreen() {
         onBackPress={() => router.back()}
         rightIcon="check"
         onRightPress={() => {
-          Alert.alert('Success', 'Settings saved successfully!');
+          useAlertStore.getState().showAlert('Success', 'Settings saved successfully!', 'success');
         }}
       />
       
