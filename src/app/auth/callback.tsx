@@ -9,6 +9,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { supabase } from '../../lib/supabase';
 
@@ -109,7 +110,7 @@ export default function AuthCallback() {
       } catch (err: any) {
         console.error('Callback auth error:', err);
         if (active) {
-          Alert.alert('Authentication Failed', err.message || 'Could not verify your credentials.');
+          useAlertStore.getState().showAlert('Authentication Failed', err.message || 'Could not verify your credentials.', 'error');
           router.replace('/auth/login');
         }
       }

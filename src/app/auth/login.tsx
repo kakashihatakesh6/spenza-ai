@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { authService } from '../../services/auth.service';
 import { Mail, Lock, LogIn, Eye, EyeOff } from 'lucide-react-native';
@@ -49,7 +50,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Please fill in all credentials.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please fill in all credentials.', 'warning');
       return;
     }
 
@@ -60,7 +61,7 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Authentication Failed', error.message || 'Check your credentials and try again.');
+      useAlertStore.getState().showAlert('Authentication Failed', error.message || 'Check your credentials and try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Google Sign-In Failed', error.message || 'An error occurred during authentication.');
+      useAlertStore.getState().showAlert('Google Sign-In Failed', error.message || 'An error occurred during authentication.', 'error');
       setGoogleLoading(false);
     }
   };

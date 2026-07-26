@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { authService } from '../../services/auth.service';
 import { Key, Eye, EyeOff, Check, AlertCircle, LockOpen } from 'lucide-react-native';
@@ -45,13 +46,13 @@ export default function ResetPasswordScreen() {
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+      useAlertStore.getState().showAlert('Validation Error', 'Password must be at least 6 characters long.', 'warning');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Passwords do not match.');
+      useAlertStore.getState().showAlert('Validation Error', 'Passwords do not match.', 'warning');
       return;
     }
 
@@ -60,9 +61,10 @@ export default function ResetPasswordScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await authService.updatePassword(newPassword);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Success',
         'Your password has been successfully updated.',
+        'success',
         [{ text: 'OK', onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           router.replace('/(tabs)');
@@ -70,7 +72,7 @@ export default function ResetPasswordScreen() {
       );
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Update Failed', error.message || 'Failed to update your password. Please try again.');
+      useAlertStore.getState().showAlert('Update Failed', error.message || 'Failed to update your password. Please try again.', 'error');
     } finally {
       setLoading(false);
     }

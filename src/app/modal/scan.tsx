@@ -23,6 +23,7 @@ import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
@@ -177,9 +178,10 @@ export default function OCRScanModal() {
         setPresetName(undefined);
       } catch (captureError: any) {
         console.warn('Camera capture failed, prompting gallery/demo fallback:', captureError);
-        Alert.alert(
+        useAlertStore.getState().showAlert(
           'Camera Capture Failed',
           'Your device camera was unable to capture the image. You can use a demo receipt or pick one from your gallery to test the scanner.',
+          'error',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Use Demo Receipt', onPress: () => capturePhoto('starbucks') },
@@ -190,9 +192,10 @@ export default function OCRScanModal() {
         setIsCapturing(false);
       }
     } else {
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Camera Not Ready',
         'The camera component is not initialized yet. Please try again in a moment, or use a demo receipt.',
+        'warning',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Use Demo Receipt', onPress: () => capturePhoto('starbucks') }
@@ -206,7 +209,7 @@ export default function OCRScanModal() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Required', 'Gallery access permission is needed to import receipts.');
+        useAlertStore.getState().showAlert('Permission Required', 'Gallery access permission is needed to import receipts.', 'warning');
         return;
       }
 
@@ -225,7 +228,7 @@ export default function OCRScanModal() {
       setPresetName(undefined);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Gallery Selection Failed', e.message || 'Failed to select image from gallery.');
+      useAlertStore.getState().showAlert('Gallery Selection Failed', e.message || 'Failed to select image from gallery.', 'error');
     }
   };
 
@@ -251,7 +254,7 @@ export default function OCRScanModal() {
       setIsScanning(false);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('OCR Failed', e.message || 'Failed to extract text from image. Please try again.');
+      useAlertStore.getState().showAlert('OCR Failed', e.message || 'Failed to extract text from image. Please try again.', 'error');
       setIsScanning(false);
       setPhotoUri(null);
       setOcrResult(null);
@@ -261,11 +264,11 @@ export default function OCRScanModal() {
   const handleSaveExtracted = () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a valid positive amount.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a valid positive amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Merchant', 'Merchant name is required.');
+      useAlertStore.getState().showAlert('Invalid Merchant', 'Merchant name is required.', 'warning');
       return;
     }
 
@@ -283,7 +286,7 @@ export default function OCRScanModal() {
       receiptImage: photoUri || undefined,
     });
 
-    Alert.alert('Success', 'Extracted expense logged successfully!');
+    useAlertStore.getState().showAlert('Success', 'Extracted expense logged successfully!', 'success');
     router.back();
   };
 

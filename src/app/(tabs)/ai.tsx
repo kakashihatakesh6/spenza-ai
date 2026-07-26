@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
 import {
   Scan,
@@ -38,9 +39,10 @@ export default function AiHubScreen() {
         showBackButton={true}
         onBackPress={() => router.back()}
         onNotificationPress={() => {
-          Alert.alert(
+          useAlertStore.getState().showAlert(
             'Notifications',
-            'No new AI processing issues. Cloud nodes and OCR engines are operating at peak efficiency.'
+            'No new AI processing issues. Cloud nodes and OCR engines are operating at peak efficiency.',
+            'info'
           );
         }}
       />

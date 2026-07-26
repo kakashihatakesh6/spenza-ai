@@ -15,6 +15,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useExpenseStore } from '../store/expenseStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useTheme } from '../hooks/useTheme';
+import { useAlertStore } from '../store/alertStore';
 import { useCurrencyStore } from '../store/currencyStore';
 import { expenseHelpers } from '../utils/expenseHelpers';
 import { Header } from '../components/Header';
@@ -156,9 +157,10 @@ export const TransactionsScreen = () => {
   const handleDelete = useCallback((id: string, merchant: string) => {
     const targetExpense = expenses.find(e => e.id === id);
     const symbol = expenseHelpers.getCurrencySymbol(targetExpense?.currency || settings.currency);
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Delete Transaction',
       `Are you sure you want to delete the expense of ${symbol}${targetExpense?.amount.toFixed(2)} at ${merchant}?`,
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {

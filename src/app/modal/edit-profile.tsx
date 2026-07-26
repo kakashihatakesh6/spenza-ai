@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/Header';
+import { useAlertStore } from '../../store/alertStore';
 import { Camera, Check, ArrowLeft, Image as ImageIcon, Sparkles } from 'lucide-react-native';
 import { storageService } from '../../services/storage.service';
 
@@ -57,7 +58,7 @@ export default function EditProfileScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need access to your gallery to upload a profile picture.');
+        useAlertStore.getState().showAlert('Permission Denied', 'We need access to your gallery to upload a profile picture.', 'warning');
         return;
       }
 
@@ -74,7 +75,7 @@ export default function EditProfileScreen() {
       }
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'Failed to pick image.');
+      useAlertStore.getState().showAlert('Error', 'Failed to pick image.', 'error');
     }
   };
 
@@ -89,7 +90,7 @@ export default function EditProfileScreen() {
     if (isSaving || isSavingRef.current) return;
 
     if (!username.trim()) {
-      Alert.alert('Validation Error', 'Username cannot be empty.');
+      useAlertStore.getState().showAlert('Validation Error', 'Username cannot be empty.', 'warning');
       return;
     }
     
@@ -105,7 +106,7 @@ export default function EditProfileScreen() {
             finalAvatarUrl = await storageService.uploadAvatar(avatarUrl, user.id);
           } catch (uploadError) {
             console.error('Failed to upload avatar to Supabase:', uploadError);
-            Alert.alert('Upload Error', 'Failed to upload profile picture to Supabase. Please try again.');
+            useAlertStore.getState().showAlert('Upload Error', 'Failed to upload profile picture to Supabase. Please try again.', 'error');
             setIsSaving(false);
             isSavingRef.current = false;
             return;
@@ -116,14 +117,14 @@ export default function EditProfileScreen() {
       await updateProfile(username.trim(), finalAvatarUrl);
       setIsSaving(false);
       isSavingRef.current = false;
-      Alert.alert('Success', 'Profile updated successfully!', [
+      useAlertStore.getState().showAlert('Success', 'Profile updated successfully!', 'success', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (err) {
       setIsSaving(false);
       isSavingRef.current = false;
       console.error(err);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      useAlertStore.getState().showAlert('Error', 'Failed to update profile. Please try again.', 'error');
     }
   };
 

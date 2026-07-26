@@ -71,9 +71,10 @@ export default function SettingsScreen() {
   }, []);
 
   const selectCurrency = useCallback(() => {
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Select Currency',
       'Choose your preferred base currency symbol:',
+      'info',
       [
         { text: 'USD ($)', onPress: () => setCurrency('USD') },
         { text: 'INR (₹)', onPress: () => setCurrency('INR') },
@@ -86,27 +87,27 @@ export default function SettingsScreen() {
 
   const handleExportCSV = useCallback(async () => {
     if (expenses.length === 0) {
-      Alert.alert('No Data', 'You have no transactions to export.');
+      useAlertStore.getState().showAlert('No Data', 'You have no transactions to export.', 'warning');
       return;
     }
     try {
       const path = await exportService.exportToCSV(expenses);
-      Alert.alert('Export Successful', `Expenses CSV file successfully created and saved to:\n\n${path}`);
+      useAlertStore.getState().showAlert('Export Successful', `Expenses CSV file successfully created and saved to:\n\n${path}`, 'success');
     } catch (e) {
-      Alert.alert('Export Failed', 'An error occurred during CSV creation.');
+      useAlertStore.getState().showAlert('Export Failed', 'An error occurred during CSV creation.', 'error');
     }
   }, [expenses]);
 
   const handleExportJSON = useCallback(async () => {
     if (expenses.length === 0) {
-      Alert.alert('No Data', 'You have no transactions to backup.');
+      useAlertStore.getState().showAlert('No Data', 'You have no transactions to backup.', 'warning');
       return;
     }
     try {
       const path = await exportService.exportToJSON(expenses);
-      Alert.alert('Backup Complete', `JSON Database backup successfully saved to:\n\n${path}`);
+      useAlertStore.getState().showAlert('Backup Complete', `JSON Database backup successfully saved to:\n\n${path}`, 'success');
     } catch (e) {
-      Alert.alert('Backup Failed', 'An error occurred during backup creation.');
+      useAlertStore.getState().showAlert('Backup Failed', 'An error occurred during backup creation.', 'error');
     }
   }, [expenses]);
 
@@ -148,7 +149,7 @@ export default function SettingsScreen() {
         );
       } else {
         setNotificationsEnabled(false);
-        Alert.alert('Permission Denied', 'Please enable notifications in device settings.');
+        useAlertStore.getState().showAlert('Permission Denied', 'Please enable notifications in device settings.', 'warning');
       }
     } else {
       await notificationService.cancelAllScheduledNotifications();
@@ -159,7 +160,7 @@ export default function SettingsScreen() {
     try {
       await notificationService.sendTestDailyReminder();
     } catch {
-      Alert.alert('Error', 'Failed to send test reminder notification.');
+      useAlertStore.getState().showAlert('Error', 'Failed to send test reminder notification.', 'error');
     }
   }, []);
 
@@ -171,7 +172,7 @@ export default function SettingsScreen() {
         expenseHelpers.getCurrencySymbol(settings.currency)
       );
     } catch {
-      Alert.alert('Error', 'Failed to send test warning notification.');
+      useAlertStore.getState().showAlert('Error', 'Failed to send test warning notification.', 'error');
     }
   }, [settings]);
 
@@ -184,7 +185,7 @@ export default function SettingsScreen() {
         expenseHelpers.getCurrencySymbol(settings.currency)
       );
     } catch {
-      Alert.alert('Error', 'Failed to send test exceeded notification.');
+      useAlertStore.getState().showAlert('Error', 'Failed to send test exceeded notification.', 'error');
     }
   }, [settings]);
 
@@ -425,7 +426,7 @@ export default function SettingsScreen() {
             iconColor="#16A34A"
             title="Connected Banks"
             subtitle={user ? 'Synced with Supabase Cloud' : 'Offline Cache Database'}
-            onPress={() => Alert.alert('Bank Integration', 'Open banking links are coming soon!')}
+            onPress={() => useAlertStore.getState().showAlert('Bank Integration', 'Open banking links are coming soon!', 'info')}
           />
         </SettingsCard>
 
@@ -450,7 +451,7 @@ export default function SettingsScreen() {
             iconBg="#FAF5FF"
             iconColor="#9333EA"
             title="Categories Management"
-            onPress={() => Alert.alert('Categories', 'Default expense categories are configured.')}
+            onPress={() => useAlertStore.getState().showAlert('Categories', 'Default expense categories are configured.', 'info')}
           />
           
           <View style={dividerStyle} />
@@ -720,7 +721,7 @@ export default function SettingsScreen() {
             iconBg="#F0FDF4"
             iconColor="#16A34A"
             title="Contact Support"
-            onPress={() => Alert.alert('Support', 'Contact support at help@spendly.com')}
+            onPress={() => useAlertStore.getState().showAlert('Support', 'Contact support at help@spendly.com', 'info')}
           />
           <View style={dividerStyle} />
           <SettingsRow
@@ -728,7 +729,7 @@ export default function SettingsScreen() {
             iconBg="#E0F2FE"
             iconColor="#0EA5E9"
             title="Privacy Policy"
-            onPress={() => Alert.alert('Privacy', 'Privacy policy can be read on spendly.com/privacy')}
+            onPress={() => useAlertStore.getState().showAlert('Privacy', 'Privacy policy can be read on spendly.com/privacy', 'info')}
           />
           <View style={dividerStyle} />
           <SettingsRow
@@ -736,7 +737,7 @@ export default function SettingsScreen() {
             iconBg="#FAF5FF"
             iconColor="#9333EA"
             title="Terms & Conditions"
-            onPress={() => Alert.alert('Terms', 'Terms of service are available on spendly.com/terms')}
+            onPress={() => useAlertStore.getState().showAlert('Terms', 'Terms of service are available on spendly.com/terms', 'info')}
           />
           <View style={dividerStyle} />
           <SettingsRow
@@ -745,7 +746,7 @@ export default function SettingsScreen() {
             iconColor="#E11D48"
             title="About App"
             subtitle="v1.0.0 (Production Build)"
-            onPress={() => Alert.alert('About', 'Spendly: Expense AI Tracker built with React Native & Supabase.')}
+            onPress={() => useAlertStore.getState().showAlert('About', 'Spendly: Expense AI Tracker built with React Native & Supabase.', 'info')}
           />
         </SettingsCard>
 

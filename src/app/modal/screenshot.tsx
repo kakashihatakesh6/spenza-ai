@@ -18,6 +18,7 @@ import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { Image as ImageIcon, Check, RefreshCw, Smartphone, Sparkles } from 'lucide-react-native';
 import { Header } from '../../components/Header';
@@ -54,7 +55,7 @@ export default function ScreenshotModal() {
       if (!selectedPreset) {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert('Permission Required', 'Cooperation needed to access gallery.');
+          useAlertStore.getState().showAlert('Permission Required', 'Cooperation needed to access gallery.', 'warning');
           return;
         }
 
@@ -77,7 +78,7 @@ export default function ScreenshotModal() {
       setPresetName(selectedPreset);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Selection Failed', e.message || 'Unable to select screenshot.');
+      useAlertStore.getState().showAlert('Selection Failed', e.message || 'Unable to select screenshot.', 'error');
     }
   };
 
@@ -105,7 +106,7 @@ export default function ScreenshotModal() {
       setIsScanning(false);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Scan Failed', e.message || 'Failed to extract details from screenshot. Please try again.');
+      useAlertStore.getState().showAlert('Scan Failed', e.message || 'Failed to extract details from screenshot. Please try again.', 'error');
       setIsScanning(false);
       setImageUri(null);
       setResult(null);
@@ -115,11 +116,11 @@ export default function ScreenshotModal() {
   const handleSaveExtracted = () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a valid positive amount.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a valid positive amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Merchant', 'Merchant name is required.');
+      useAlertStore.getState().showAlert('Invalid Merchant', 'Merchant name is required.', 'warning');
       return;
     }
 
@@ -137,7 +138,7 @@ export default function ScreenshotModal() {
       receiptImage: imageUri || undefined,
     });
 
-    Alert.alert('Success', 'Screenshot payment logged successfully!');
+    useAlertStore.getState().showAlert('Success', 'Screenshot payment logged successfully!', 'success');
     router.back();
   };
 

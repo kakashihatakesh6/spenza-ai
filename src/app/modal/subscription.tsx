@@ -13,6 +13,7 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
 import {
   Sparkles,
@@ -48,7 +49,7 @@ export default function SubscriptionScreen() {
   const handleUpgrade = async () => {
     if (!isPro) {
       if (!cardNumber || !expiry || !cvv || !cardName) {
-        Alert.alert('Validation Error', 'Please fill out all payment fields to proceed.');
+        useAlertStore.getState().showAlert('Validation Error', 'Please fill out all payment fields to proceed.', 'warning');
         return;
       }
     }
@@ -68,17 +69,18 @@ export default function SubscriptionScreen() {
       
       setIsProcessing(false);
       
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         isPro ? 'Subscription Cancelled' : 'Upgrade Complete!',
         isPro 
           ? 'Your Pro membership has been cancelled. You will retain access until the end of your billing cycle.'
           : 'Welcome to Spendly Pro Suite! Enjoy unlimited OCR scans and predictive accounting.',
+        'success',
         [{ text: 'Great', onPress: () => router.back() }]
       );
     } catch (err) {
       setIsProcessing(false);
       console.error(err);
-      Alert.alert('Error', 'Failed to process transaction. Please try again.');
+      useAlertStore.getState().showAlert('Error', 'Failed to process transaction. Please try again.', 'error');
     }
   };
 

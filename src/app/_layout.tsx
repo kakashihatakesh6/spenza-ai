@@ -10,7 +10,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrencyStore } from '../store/currencyStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Platform } from 'react-native';
+import { Platform, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
@@ -187,6 +187,12 @@ function RootLayoutNav() {
           onAnimationEnd={() => setSplashVisible(false)}
           isLoading={authLoading}
         />
+      )}
+      {authLoading && !splashVisible && (
+        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: theme === 'dark' ? '#0B0F19' : '#FFFFFF', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ color: colors.text, marginTop: 16, fontSize: 15, fontWeight: '700' }}>Signing out...</Text>
+        </View>
       )}
       <CustomAlertModal />
     </>

@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { authService } from '../../services/auth.service';
 import { Mail, Lock, UserPlus, Eye, EyeOff, Check, AlertCircle } from 'lucide-react-native';
@@ -48,19 +49,19 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Please fill in all credentials.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please fill in all credentials.', 'warning');
       return;
     }
 
     if (password !== confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Passwords do not match.');
+      useAlertStore.getState().showAlert('Validation Error', 'Passwords do not match.', 'warning');
       return;
     }
 
     if (password.length < 6) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+      useAlertStore.getState().showAlert('Validation Error', 'Password must be at least 6 characters long.', 'warning');
       return;
     }
 
@@ -69,9 +70,10 @@ export default function RegisterScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await authService.signUp(email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Registration Successful',
         'Please check your email to confirm your account, then log in.',
+        'success',
         [{ text: 'OK', onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           router.push('/auth/login');
@@ -79,7 +81,7 @@ export default function RegisterScreen() {
       );
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Sign Up Failed', error.message || 'An error occurred during registration.');
+      useAlertStore.getState().showAlert('Sign Up Failed', error.message || 'An error occurred during registration.', 'error');
     } finally {
       setLoading(false);
     }

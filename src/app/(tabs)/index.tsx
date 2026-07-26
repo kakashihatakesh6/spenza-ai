@@ -17,6 +17,8 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useCurrencyStore } from '../../store/currencyStore';
+import { useAlertStore } from '../../store/alertStore';
+import { Skeleton } from '../../components/Skeleton';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
@@ -53,7 +55,7 @@ export default function Dashboard() {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   
-  const { expenses, budgets, categories, fetchExpenses, fetchCategories, fetchBudgets, addExpense, saveBudget } =
+  const { expenses, budgets, categories, fetchExpenses, fetchCategories, fetchBudgets, addExpense, saveBudget, isLoading } =
     useExpenseStore();
   const { settings } = useSettingsStore();
 
@@ -183,62 +185,7 @@ export default function Dashboard() {
   const insights = expenseHelpers.getSpendingInsights(expenses, budgets, settings.currency);
 
 
-  const seedSampleData = () => {
-    Alert.alert(
-      'Seed Sample Data',
-      'This will populate your database with 8 mock transactions and a monthly budget of ₹1200 so you can test all features.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Seed Data',
-          onPress: async () => {
-            const today = new Date().toISOString().split('T')[0];
-            const getPastDate = (daysAgo: number) => {
-              const d = new Date();
-              d.setDate(d.getDate() - daysAgo);
-              return d.toISOString().split('T')[0];
-            };
 
-             // Seed budget
-            await saveBudget({
-              id: 'all_monthly',
-              category: 'All',
-              amount: 1200,
-              period: 'monthly',
-            });
- 
-             // Seed category budgets
-             await saveBudget({
-              id: 'food_monthly',
-              category: 'Food',
-              amount: 300,
-              period: 'monthly',
-            });
-
-            // Seed expenses
-            const mockItems = [
-              { id: 'm1', amount: 8.75, merchant: 'Starbucks Coffee', category: 'Food', date: today, time: '08:45', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Caffe Latte & Scone', receiptImage: 'mock_starbucks.jpg' },
-              { id: 'm2', amount: 24.50, merchant: 'Uber Ride', category: 'Travel', date: getPastDate(1), time: '18:30', paymentMethod: 'Google Pay', currency: settings.currency, notes: 'Office to home', receiptImage: 'mock_gpay_upi_screenshot.png' },
-              { id: 'm3', amount: 85.20, merchant: 'Walmart Grocery', category: 'Grocery', date: getPastDate(1), time: '11:15', paymentMethod: 'Debit Card', currency: settings.currency, notes: 'Weekly groceries', receiptImage: 'mock_walmart.jpg' },
-              { id: 'm4', amount: 45.00, merchant: 'Shell Gas Station', category: 'Fuel', date: getPastDate(2), time: '07:30', paymentMethod: 'Cash', currency: settings.currency, notes: 'Fuel fillup', receiptImage: 'mock_shell.jpg' },
-              { id: 'm5', amount: 15.49, merchant: 'Netflix Subscription', category: 'Entertainment', date: getPastDate(3), time: '00:00', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Monthly standard plan' },
-              { id: 'm6', amount: 19.99, merchant: 'Amazon Charger', category: 'Shopping', date: getPastDate(4), time: '14:20', paymentMethod: 'Google Pay', currency: settings.currency, notes: 'Wireless charging pad', receiptImage: 'mock_amazon.jpg' },
-              { id: 'm7', amount: 79.99, merchant: 'Comcast Broadband', category: 'Bills', date: getPastDate(5), time: '10:00', paymentMethod: 'UPI (GPay)', currency: settings.currency, notes: 'WiFi bill', receiptImage: 'mock_gpay_upi_screenshot.png' },
-              { id: 'm8', amount: 125.00, merchant: 'CVS Pharmacy', category: 'Health', date: getPastDate(6), time: '16:45', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Vitamins & meds' },
-            ];
-
-            for (const item of mockItems) {
-              addExpense(item);
-            }
-
-            Alert.alert('Success', 'Sample data successfully seeded! Restarting views.');
-            fetchExpenses();
-            fetchBudgets();
-          },
-        },
-      ]
-    );
-  };
 
   // Render Category Pie Chart via custom SVG for robust, light styling
   const renderMiniCategoryChart = () => {
@@ -337,20 +284,96 @@ export default function Dashboard() {
     return isDark ? '#172554' : '#EFF6FF'; // Soft blue
   };
 
+  const renderDashboardSkeleton = () => {
+    return (
+      <View style={{ padding: 16 }}>
+        {/* Spending Summary Card Skeleton */}
+        <View style={styles.summaryHeader}>
+          <View style={styles.tabContainer}>
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <View key={idx} style={[styles.tabItem, { opacity: 0.5 }]}>
+                <Skeleton width={50} height={12} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+          <Card style={styles.spendCard}>
+            <Skeleton width="40%" height={14} borderRadius={4} style={{ marginBottom: 12 }} />
+            <Skeleton width="60%" height={32} borderRadius={6} style={{ marginBottom: 20 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Skeleton width={80} height={80} borderRadius={40} />
+              <View style={{ flex: 1, marginLeft: 20, gap: 8 }}>
+                <Skeleton width="80%" height={12} borderRadius={4} />
+                <Skeleton width="70%" height={12} borderRadius={4} />
+                <Skeleton width="60%" height={12} borderRadius={4} />
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* Quick Actions Deck Skeleton */}
+        <View style={styles.actionsDeck}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <View key={idx} style={[styles.actionBtn, { backgroundColor: colors.card, opacity: 0.7 }]}>
+              <Skeleton width={32} height={32} borderRadius={16} style={{ marginBottom: 8 }} />
+              <Skeleton width={60} height={12} borderRadius={4} />
+            </View>
+          ))}
+        </View>
+
+        {/* Budget Goals Skeleton */}
+        <View style={styles.sectionHeader}>
+          <Skeleton width="30%" height={16} borderRadius={4} />
+        </View>
+        <Card style={styles.budgetCard}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 12 }}>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <View key={idx} style={{ alignItems: 'center', gap: 8 }}>
+                <Skeleton width={50} height={50} borderRadius={25} />
+                <Skeleton width={40} height={12} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+        </Card>
+
+        {/* Recent Transactions Skeleton */}
+        <View style={styles.sectionHeader}>
+          <Skeleton width="40%" height={16} borderRadius={4} />
+        </View>
+        <View style={{ gap: 12 }}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <View key={idx} style={[styles.recentSkeletonCard, { backgroundColor: colors.card }]}>
+              <Skeleton width={40} height={40} borderRadius={20} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Skeleton width="60%" height={14} borderRadius={4} />
+                <Skeleton width="40%" height={10} borderRadius={4} />
+              </View>
+              <Skeleton width={60} height={16} borderRadius={4} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
         title="SPENDLY"
         onMenuPress={() => setProfileModalVisible(true)}
         onNotificationPress={() => {
-          Alert.alert(
+          useAlertStore.getState().showAlert(
             'Notifications',
-            'No new spending alerts. All budget parameters are running within optimal limits.'
+            'No new spending alerts. All budget parameters are running within optimal limits.',
+            'info'
           );
         }}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 1. Spending Summary Card */}
+        {isLoading ? (
+          renderDashboardSkeleton()
+        ) : (
+          <>
+            {/* 1. Spending Summary Card */}
       <View style={styles.summaryHeader}>
         <View style={styles.tabContainer}>
           {(['today', 'week', 'month', 'year'] as const).map((tab) => (
@@ -517,6 +540,8 @@ export default function Dashboard() {
         </View>
       )}
       <View style={{ height: 40 }} />
+          </>
+        )}
       <TransactionDetailModal
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
@@ -990,5 +1015,12 @@ const styles = StyleSheet.create({
   ringValue: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  recentSkeletonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
   },
 });

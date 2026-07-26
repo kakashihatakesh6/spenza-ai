@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { authService } from '../../services/auth.service';
 import { Mail, Send, ChevronLeft, Check, AlertCircle, Key, Eye, EyeOff, LockOpen } from 'lucide-react-native';
@@ -63,13 +64,13 @@ export default function ForgotPasswordScreen() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Please enter your email address.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter your email address.', 'warning');
       return;
     }
 
     if (!validateEmail(trimmedEmail)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Please enter a valid email address.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter a valid email address.', 'warning');
       return;
     }
 
@@ -81,7 +82,7 @@ export default function ForgotPasswordScreen() {
       setStep('verify');
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Request Failed', error.message || 'An error occurred. Please try again.');
+      useAlertStore.getState().showAlert('Request Failed', error.message || 'An error occurred. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -92,7 +93,7 @@ export default function ForgotPasswordScreen() {
     const trimmedOtp = otp.trim();
     if (!trimmedOtp || trimmedOtp.length < 6) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Please enter the 6-digit verification code.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter the 6-digit verification code.', 'warning');
       return;
     }
 
@@ -104,7 +105,7 @@ export default function ForgotPasswordScreen() {
       setStep('reset');
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Verification Failed', error.message || 'The OTP entered is incorrect or expired.');
+      useAlertStore.getState().showAlert('Verification Failed', error.message || 'The OTP entered is incorrect or expired.', 'error');
     } finally {
       setLoading(false);
     }
@@ -114,13 +115,13 @@ export default function ForgotPasswordScreen() {
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+      useAlertStore.getState().showAlert('Validation Error', 'Password must be at least 6 characters long.', 'warning');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      Alert.alert('Validation Error', 'Passwords do not match.');
+      useAlertStore.getState().showAlert('Validation Error', 'Passwords do not match.', 'warning');
       return;
     }
 
@@ -129,9 +130,10 @@ export default function ForgotPasswordScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await authService.updatePassword(newPassword);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Success',
         'Your password has been successfully updated.',
+        'success',
         [{ text: 'OK', onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           router.replace('/(tabs)');
@@ -139,7 +141,7 @@ export default function ForgotPasswordScreen() {
       );
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Update Failed', error.message || 'Failed to update your password. Please try again.');
+      useAlertStore.getState().showAlert('Update Failed', error.message || 'Failed to update your password. Please try again.', 'error');
     } finally {
       setLoading(false);
     }

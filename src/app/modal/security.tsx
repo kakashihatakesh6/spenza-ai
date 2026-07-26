@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
 import {
   ArrowLeft,
@@ -84,15 +85,15 @@ export default function SecurityScreen() {
 
   const handleUpdatePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Validation Error', 'Please fill out all password fields.');
+      useAlertStore.getState().showAlert('Validation Error', 'Please fill out all password fields.', 'warning');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Validation Error', 'New passwords do not match.');
+      useAlertStore.getState().showAlert('Validation Error', 'New passwords do not match.', 'warning');
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Validation Error', 'Password must be at least 6 characters.');
+      useAlertStore.getState().showAlert('Validation Error', 'Password must be at least 6 characters.', 'warning');
       return;
     }
 
@@ -106,18 +107,19 @@ export default function SecurityScreen() {
       setNewPassword('');
       setConfirmPassword('');
       
-      Alert.alert('Success', 'Your password has been successfully updated.');
+      useAlertStore.getState().showAlert('Success', 'Your password has been successfully updated.', 'success');
     } catch (e) {
       setIsUpdatingPassword(false);
       console.error(e);
-      Alert.alert('Error', 'Failed to update password.');
+      useAlertStore.getState().showAlert('Error', 'Failed to update password.', 'error');
     }
   };
 
   const terminateOtherSessions = () => {
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Terminate Sessions',
       'Are you sure you want to sign out of all other devices?',
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -125,7 +127,7 @@ export default function SecurityScreen() {
           style: 'destructive',
           onPress: () => {
             setSessions(prev => prev.filter(s => s.isCurrent));
-            Alert.alert('Success', 'Successfully terminated all other sessions.');
+            useAlertStore.getState().showAlert('Success', 'Successfully terminated all other sessions.', 'success');
           },
         },
       ]
@@ -193,7 +195,7 @@ export default function SecurityScreen() {
               onValueChange={(val) => {
                 setTwoFactorEnabled(val);
                 if (val) {
-                  Alert.alert('2FA Configuration', 'Verification setup link sent to your registered email.');
+                  useAlertStore.getState().showAlert('2FA Configuration', 'Verification setup link sent to your registered email.', 'info');
                 }
               }}
               trackColor={{ false: '#D1D5DB', true: colors.primary }}

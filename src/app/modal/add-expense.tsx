@@ -14,6 +14,7 @@ import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import * as ImagePicker from 'expo-image-picker';
@@ -75,7 +76,7 @@ export default function AddExpenseModal() {
   const selectReceiptImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Cooperation needed to access gallery.');
+      useAlertStore.getState().showAlert('Permission Required', 'Cooperation needed to access gallery.', 'warning');
       return;
     }
 
@@ -93,11 +94,11 @@ export default function AddExpenseModal() {
   const handleSave = async () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Input', 'Please enter a valid positive expense amount.');
+      useAlertStore.getState().showAlert('Invalid Input', 'Please enter a valid positive expense amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Input', 'Please enter a merchant name.');
+      useAlertStore.getState().showAlert('Invalid Input', 'Please enter a merchant name.', 'warning');
       return;
     }
 
@@ -120,7 +121,7 @@ export default function AddExpenseModal() {
         ...original,
         ...expensePayload,
       });
-      Alert.alert('Success', 'Transaction successfully updated.');
+      useAlertStore.getState().showAlert('Success', 'Transaction successfully updated.', 'success');
     } else {
       const newId = `exp_${Date.now()}`;
       addExpense({
@@ -130,7 +131,7 @@ export default function AddExpenseModal() {
       
       // Perform Budget limit evaluations and push alerts
       _checkBudgetLimits(category, parsedAmount);
-      Alert.alert('Success', 'Transaction successfully logged.');
+      useAlertStore.getState().showAlert('Success', 'Transaction successfully logged.', 'success');
     }
 
     router.back();
@@ -193,9 +194,10 @@ export default function AddExpenseModal() {
   };
   const handleDeleteExpense = () => {
     if (id) {
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Delete Transaction',
         'Are you sure you want to permanently delete this transaction?',
+        'warning',
         [
           { text: 'Cancel', style: 'cancel' },
           {

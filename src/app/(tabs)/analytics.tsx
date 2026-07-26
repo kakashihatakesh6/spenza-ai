@@ -14,6 +14,8 @@ import { useExpenseStore } from '../../store/expenseStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useCurrencyStore } from '../../store/currencyStore';
+import { useAlertStore } from '../../store/alertStore';
+import { Skeleton } from '../../components/Skeleton';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
@@ -39,7 +41,7 @@ export default function AnalyticsScreen() {
       headerShown: false,
     });
   }, [navigation]);
-  const { expenses, categories, fetchExpenses } = useExpenseStore();
+  const { expenses, categories, fetchExpenses, isLoading } = useExpenseStore();
   const { settings } = useSettingsStore();
 
   const [timePeriod, setTimePeriod] = useState<'week' | 'month'>('week');
@@ -215,6 +217,53 @@ export default function AnalyticsScreen() {
     }));
   }
 
+  const renderAnalyticsSkeleton = () => {
+    return (
+      <View style={styles.content}>
+        {/* Trend Chart Card Skeleton */}
+        <View style={styles.headerRow}>
+          <Skeleton width="40%" height={16} borderRadius={4} />
+          <Skeleton width="30%" height={28} borderRadius={14} />
+        </View>
+        <Card style={styles.chartCard}>
+          <Skeleton width="50%" height={12} borderRadius={4} style={{ marginBottom: 12 }} />
+          <Skeleton width="30%" height={24} borderRadius={4} style={{ marginBottom: 20 }} />
+          <View style={{ height: 160, justifyContent: 'flex-end', flexDirection: 'row', gap: 16, alignItems: 'flex-end', paddingBottom: 10 }}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <Skeleton key={idx} width={28} height={40 + Math.random() * 80} borderRadius={6} />
+            ))}
+          </View>
+        </Card>
+
+        {/* Core Statistics Skeleton */}
+        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 12 }]}>Key Statistics</Text>
+        <View style={styles.statsGrid}>
+          {Array.from({ length: 2 }).map((_, idx) => (
+            <Card key={idx} style={styles.gridCard}>
+              <Skeleton width={20} height={20} borderRadius={4} style={{ marginBottom: 8 }} />
+              <Skeleton width="60%" height={12} borderRadius={4} style={{ marginBottom: 6 }} />
+              <Skeleton width="85%" height={18} borderRadius={4} />
+            </Card>
+          ))}
+        </View>
+
+        {/* Category Breakdown Skeleton */}
+        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 12 }]}>Category Breakdown</Text>
+        <Card style={{ padding: 16, gap: 16 }}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <View key={idx} style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Skeleton width="30%" height={14} borderRadius={4} />
+                <Skeleton width="15%" height={14} borderRadius={4} />
+              </View>
+              <Skeleton width="100%" height={10} borderRadius={5} />
+            </View>
+          ))}
+        </Card>
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
@@ -223,11 +272,14 @@ export default function AnalyticsScreen() {
         onBackPress={() => router.back()}
         rightIcon="download"
         onRightPress={() => {
-          Alert.alert('Export Report', 'Your PDF & CSV reports are being prepared for download.');
+          useAlertStore.getState().showAlert('Export Report', 'Your PDF & CSV reports are being prepared for download.', 'info');
         }}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.content}>
+        {isLoading ? (
+          renderAnalyticsSkeleton()
+        ) : (
+          <View style={styles.content}>
           {/* Chart Period Selector */}
           <View style={styles.headerRow}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Spending Trend</Text>
@@ -368,6 +420,7 @@ export default function AnalyticsScreen() {
           </Card>
           <View style={{ height: 40 }} />
         </View>
+        )}
     </ScrollView>
     </View>
   );

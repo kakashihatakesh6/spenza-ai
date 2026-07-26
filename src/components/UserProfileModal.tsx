@@ -15,6 +15,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../hooks/useTheme';
+import { useAlertStore } from '../store/alertStore';
 import { expenseHelpers } from '../utils/expenseHelpers';
 import {
   User,
@@ -65,9 +66,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const handleSignOut = () => {
     onClose();
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Sign Out',
       'Are you sure you want to sign out of your account?',
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
