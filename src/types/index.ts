@@ -33,9 +33,6 @@ export interface Settings {
   theme: 'light' | 'dark' | 'system';
   currency: string;
   notificationsEnabled: boolean;
-  ocrEngine: 'mock' | 'cloud';
-  aiCategorizationEnabled: boolean;
-  geminiApiKey?: string;
   notificationHour: number;
   notificationMinute: number;
   budgetWarningEnabled: boolean;

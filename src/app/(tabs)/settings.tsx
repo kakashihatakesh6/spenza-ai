@@ -53,9 +53,6 @@ export default function SettingsScreen() {
     setTheme, 
     setCurrency, 
     setNotificationsEnabled, 
-    setAiCategorizationEnabled, 
-    setOcrEngine, 
-    setGeminiApiKey,
     setNotificationTime,
     setBudgetWarningEnabled,
     setBudgetWarningThreshold,
@@ -373,7 +370,6 @@ export default function SettingsScreen() {
   };
 
   const clockColonStyle = [styles.clockColon, { color: colors.textSecondary }];
-  const apiKeyLabelStyle = [styles.apiKeyLabel, { color: colors.textSecondary }];
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
@@ -667,50 +663,7 @@ export default function SettingsScreen() {
             subtitle="Export full JSON payload database"
             onPress={handleExportJSON}
           />
-          <View style={dividerStyle} />
-          <ToggleRow
-            icon="analytics-outline"
-            iconBg="#F5F3FF"
-            iconColor="#7C3AED"
-            title="AI Categorization"
-            subtitle="Predict categories automatically after scanning"
-            value={settings.aiCategorizationEnabled}
-            onValueChange={setAiCategorizationEnabled}
-            activeTrackColor={colors.primary}
-          />
-          <View style={dividerStyle} />
-          <ToggleRow
-            icon="scan-outline"
-            iconBg="#FEF3C7"
-            iconColor="#D97706"
-            title="Cloud OCR Engine"
-            subtitle="Use Google Gemini API for receipt parsing"
-            value={settings.ocrEngine === 'cloud'}
-            onValueChange={(enabled) => setOcrEngine(enabled ? 'cloud' : 'mock')}
-            activeTrackColor={colors.primary}
-          />
 
-          {settings.ocrEngine === 'cloud' && (
-            <>
-              <View style={dividerStyle} />
-              <View style={styles.apiKeyContainer}>
-                <Text style={apiKeyLabelStyle}>GEMINI API KEY</Text>
-                <TextInput
-                  style={[styles.apiKeyInput, { color: colors.text, borderColor: colors.border }]}
-                  value={settings.geminiApiKey}
-                  onChangeText={setGeminiApiKey}
-                  placeholder="Enter your Gemini API key..."
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text style={helpTextStyle}>
-                  This key is stored securely on your device. It enables extracting real data from receipts and invoices.
-                </Text>
-              </View>
-            </>
-          )}
         </SettingsCard>
 
         {/* Help & Information */}
@@ -904,22 +857,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
   },
-  apiKeyContainer: {
-    paddingVertical: 12,
-  },
-  apiKeyLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  apiKeyInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    height: 40,
-    paddingHorizontal: 12,
-    fontSize: 13,
-  },
+
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',

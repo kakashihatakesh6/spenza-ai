@@ -8,9 +8,6 @@ interface SettingsState {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setCurrency: (currency: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
-  setOcrEngine: (engine: 'mock' | 'cloud') => void;
-  setAiCategorizationEnabled: (enabled: boolean) => void;
-  setGeminiApiKey: (key: string) => void;
   setNotificationTime: (hour: number, minute: number) => void;
   setBudgetWarningEnabled: (enabled: boolean) => void;
   setBudgetWarningThreshold: (threshold: number) => void;
@@ -21,9 +18,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     theme: 'system',
     currency: 'INR',
     notificationsEnabled: true,
-    ocrEngine: 'mock',
-    aiCategorizationEnabled: true,
-    geminiApiKey: process.env.GEMINI_API_KEY || '',
     notificationHour: 20,
     notificationMinute: 0,
     budgetWarningEnabled: true,
@@ -59,30 +53,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       set((state) => ({ settings: { ...state.settings, notificationsEnabled: enabled } }));
     } catch (error) {
       console.error('Error saving notificationsEnabled setting:', error);
-    }
-  },
-  setOcrEngine: (engine) => {
-    try {
-      expenseRepository.saveSetting('ocrEngine', engine);
-      set((state) => ({ settings: { ...state.settings, ocrEngine: engine } }));
-    } catch (error) {
-      console.error('Error saving ocrEngine setting:', error);
-    }
-  },
-  setAiCategorizationEnabled: (enabled) => {
-    try {
-      expenseRepository.saveSetting('aiCategorizationEnabled', String(enabled));
-      set((state) => ({ settings: { ...state.settings, aiCategorizationEnabled: enabled } }));
-    } catch (error) {
-      console.error('Error saving aiCategorizationEnabled setting:', error);
-    }
-  },
-  setGeminiApiKey: (key) => {
-    try {
-      expenseRepository.saveSetting('geminiApiKey', key);
-      set((state) => ({ settings: { ...state.settings, geminiApiKey: key } }));
-    } catch (error) {
-      console.error('Error saving geminiApiKey setting:', error);
     }
   },
   setNotificationTime: (hour, minute) => {

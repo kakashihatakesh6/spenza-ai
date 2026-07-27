@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
-import { useSettingsStore } from '../store/settingsStore';
 
 export interface OcrResult {
   merchant: string;
@@ -64,19 +63,17 @@ export const ocrService = {
    * Connects to the Gemini Cloud API if configured, otherwise falls back to local simulation.
    */
   async extractReceipt(imageUri: string, typePreset?: string): Promise<OcrResult> {
-    const settings = useSettingsStore.getState().settings;
-    const rawApiKey = process.env.GEMINI_API_KEY ||
-                      settings.geminiApiKey;
+    const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
     const apiKey = rawApiKey ? rawApiKey.trim() : '';
 
     console.log('DEBUG: Using Gemini API Key (masked):', apiKey ? apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 5) : 'undefined');
 
     const isMockUri = imageUri.startsWith('mock_');
-    const useCloud = settings.ocrEngine === 'cloud' || !isMockUri;
+    const useCloud = !isMockUri;
 
     if (useCloud) {
       if (!apiKey) {
-        throw new Error('Gemini API key is not configured. Please set it in Settings to perform actual OCR text extraction.');
+        throw new Error('Gemini API key is not configured. Please set the GEMINI_API_KEY environment variable to perform actual OCR text extraction.');
       }
 
       let targetUri = imageUri;
@@ -170,11 +167,12 @@ Follow these strict guidelines:
           }
         };
 
-        const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
         const response = await fetch(apiEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
           },
           body: JSON.stringify(payload),
         });

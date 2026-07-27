@@ -102,8 +102,6 @@ export function initDatabase(): void {
         { key: 'theme', value: 'system' },
         { key: 'currency', value: 'INR' },
         { key: 'notificationsEnabled', value: 'true' },
-        { key: 'ocrEngine', value: 'mock' },
-        { key: 'aiCategorizationEnabled', value: 'true' },
       ];
 
       for (const set of defaultSettings) {
@@ -146,8 +144,6 @@ function initWebDatabase() {
       theme: 'system',
       currency: 'INR',
       notificationsEnabled: 'true',
-      ocrEngine: 'mock',
-      aiCategorizationEnabled: 'true',
     };
     localStorage.setItem('web_settings', JSON.stringify(defaultSettings));
   }

@@ -161,7 +161,6 @@ export const expenseRepository = {
 
   // --- Settings ---
   getSettings(): Settings {
-    const defaultKey = process.env.GEMINI_API_KEY || '';
     if (Platform.OS === 'web') {
       const data = localStorage.getItem('web_settings');
       const settingsMap = data ? JSON.parse(data) : {};
@@ -169,9 +168,6 @@ export const expenseRepository = {
         theme: (settingsMap.theme as 'light' | 'dark' | 'system') || 'system',
         currency: settingsMap.currency || 'INR',
         notificationsEnabled: settingsMap.notificationsEnabled === 'true' || settingsMap.notificationsEnabled === true,
-        ocrEngine: (settingsMap.ocrEngine as 'mock' | 'cloud') || 'mock',
-        aiCategorizationEnabled: settingsMap.aiCategorizationEnabled === 'true' || settingsMap.aiCategorizationEnabled === true,
-        geminiApiKey: settingsMap.geminiApiKey || defaultKey,
         notificationHour: settingsMap.notificationHour !== undefined ? Number(settingsMap.notificationHour) : 20,
         notificationMinute: settingsMap.notificationMinute !== undefined ? Number(settingsMap.notificationMinute) : 0,
         budgetWarningEnabled: settingsMap.budgetWarningEnabled === undefined ? true : (settingsMap.budgetWarningEnabled === 'true' || settingsMap.budgetWarningEnabled === true),
@@ -184,9 +180,6 @@ export const expenseRepository = {
       theme: 'system',
       currency: 'INR',
       notificationsEnabled: true,
-      ocrEngine: 'mock',
-      aiCategorizationEnabled: true,
-      geminiApiKey: defaultKey,
       notificationHour: 20,
       notificationMinute: 0,
       budgetWarningEnabled: true,
@@ -204,12 +197,6 @@ export const expenseRepository = {
         settings.currency = row.value;
       } else if (row.key === 'notificationsEnabled') {
         settings.notificationsEnabled = row.value === 'true';
-      } else if (row.key === 'ocrEngine') {
-        settings.ocrEngine = row.value as 'mock' | 'cloud';
-      } else if (row.key === 'aiCategorizationEnabled') {
-        settings.aiCategorizationEnabled = row.value === 'true';
-      } else if (row.key === 'geminiApiKey') {
-        settings.geminiApiKey = defaultKey || row.value;
       } else if (row.key === 'notificationHour') {
         settings.notificationHour = Number(row.value);
       } else if (row.key === 'notificationMinute') {
