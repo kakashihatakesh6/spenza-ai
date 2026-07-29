@@ -18,6 +18,7 @@ import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
+import { logger } from '../../services/logger';
 import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { Image as ImageIcon, Check, RefreshCw, Smartphone, Sparkles } from 'lucide-react-native';
@@ -77,7 +78,7 @@ export default function ScreenshotModal() {
       setImageUri(uri);
       setPresetName(selectedPreset);
     } catch (e: any) {
-      console.error(e);
+      logger.error('Selection Failed', e);
       useAlertStore.getState().showAlert('Selection Failed', e.message || 'Unable to select screenshot.', 'error');
     }
   };
@@ -105,7 +106,7 @@ export default function ScreenshotModal() {
       
       setIsScanning(false);
     } catch (e: any) {
-      console.error(e);
+      logger.error('Scan Failed', e);
       useAlertStore.getState().showAlert('Scan Failed', e.message || 'Failed to extract details from screenshot. Please try again.', 'error');
       setIsScanning(false);
       setImageUri(null);

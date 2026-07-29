@@ -17,6 +17,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/Header';
 import { useAlertStore } from '../../store/alertStore';
+import { logger } from '../../services/logger';
 import { Camera, Check, ArrowLeft, Image as ImageIcon, Sparkles } from 'lucide-react-native';
 import { storageService } from '../../services/storage.service';
 
@@ -74,7 +75,7 @@ export default function EditProfileScreen() {
         setSelectedPreset(null);
       }
     } catch (e) {
-      console.error(e);
+      logger.error('Failed to pick image', e);
       useAlertStore.getState().showAlert('Error', 'Failed to pick image.', 'error');
     }
   };
@@ -105,7 +106,7 @@ export default function EditProfileScreen() {
           try {
             finalAvatarUrl = await storageService.uploadAvatar(avatarUrl, user.id);
           } catch (uploadError) {
-            console.error('Failed to upload avatar to Supabase:', uploadError);
+            logger.error('Failed to upload avatar to Supabase', uploadError);
             useAlertStore.getState().showAlert('Upload Error', 'Failed to upload profile picture to Supabase. Please try again.', 'error');
             setIsSaving(false);
             isSavingRef.current = false;
@@ -123,7 +124,7 @@ export default function EditProfileScreen() {
     } catch (err) {
       setIsSaving(false);
       isSavingRef.current = false;
-      console.error(err);
+      logger.error('Failed to update profile', err);
       useAlertStore.getState().showAlert('Error', 'Failed to update profile. Please try again.', 'error');
     }
   };

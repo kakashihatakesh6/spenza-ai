@@ -15,6 +15,7 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
+import { logger } from '../../services/logger';
 import {
   ArrowLeft,
   Shield,
@@ -110,7 +111,7 @@ export default function SecurityScreen() {
       useAlertStore.getState().showAlert('Success', 'Your password has been successfully updated.', 'success');
     } catch (e) {
       setIsUpdatingPassword(false);
-      console.error(e);
+      logger.error('Failed to update password', e);
       useAlertStore.getState().showAlert('Error', 'Failed to update password.', 'error');
     }
   };

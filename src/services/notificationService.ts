@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 let isHandlerSet = false;
 
@@ -44,7 +45,7 @@ export const notificationService = {
   async sendImmediateNotification(title: string, body: string, data?: Record<string, any>): Promise<string | undefined> {
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
-      console.warn('Notifications permission not granted');
+      logger.warn('Notifications permission not granted');
       return undefined;
     }
 

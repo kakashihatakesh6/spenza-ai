@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
+import { logger } from '../services/logger';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -15,9 +16,15 @@ export function getDatabase(): SQLite.SQLiteDatabase | null {
 
 export function initDatabase(): void {
   try {
+    let migrated = false;
+
     if (Platform.OS === 'web') {
       // Initialize Web Mock Database via localStorage
-      initWebDatabase();
+      const wasMigrated = initWebDatabase();
+      logger.info('Database initialized');
+      if (wasMigrated) {
+        logger.info('Migration completed');
+      }
       return;
     }
 
@@ -69,6 +76,7 @@ export function initDatabase(): void {
     );
 
     if (categoriesCount && categoriesCount.count === 0) {
+      migrated = true;
       const defaultCategories = [
         { id: '1', name: 'Food', icon: 'food-fork-drink', color: '#FF9500' },
         { id: '2', name: 'Grocery', icon: 'cart', color: '#4CD964' },
@@ -98,6 +106,7 @@ export function initDatabase(): void {
     );
 
     if (settingsCount && settingsCount.count === 0) {
+      migrated = true;
       const defaultSettings = [
         { key: 'theme', value: 'system' },
         { key: 'currency', value: 'INR' },
@@ -111,16 +120,24 @@ export function initDatabase(): void {
         );
       }
     }
+
+    logger.info('Database initialized');
+    if (migrated) {
+      logger.info('Migration completed');
+    }
   } catch (error) {
-    console.error('Failed to initialize local SQLite database:', error);
+    logger.error('Failed to initialize local SQLite database', error);
   }
 }
 
-function initWebDatabase() {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+function initWebDatabase(): boolean {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+
+  let migrated = false;
 
   // 1. Seed Categories
   if (!localStorage.getItem('web_categories')) {
+    migrated = true;
     const defaultCategories = [
       { id: '1', name: 'Food', icon: 'food-fork-drink', color: '#FF9500' },
       { id: '2', name: 'Grocery', icon: 'cart', color: '#4CD964' },
@@ -140,6 +157,7 @@ function initWebDatabase() {
 
   // 2. Seed Settings
   if (!localStorage.getItem('web_settings')) {
+    migrated = true;
     const defaultSettings = {
       theme: 'system',
       currency: 'INR',
@@ -157,4 +175,6 @@ function initWebDatabase() {
   if (!localStorage.getItem('web_budgets')) {
     localStorage.setItem('web_budgets', JSON.stringify([]));
   }
+
+  return migrated;
 }

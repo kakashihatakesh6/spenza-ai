@@ -12,6 +12,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../services/logger';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -108,7 +109,7 @@ export default function AuthCallback() {
 
         throw new Error('No authentication tokens or codes were found in the redirect URL.');
       } catch (err: any) {
-        console.error('Callback auth error:', err);
+        logger.error('Callback auth error', err);
         if (active) {
           useAlertStore.getState().showAlert('Authentication Failed', err.message || 'Could not verify your credentials.', 'error');
           router.replace('/auth/login');
@@ -134,7 +135,7 @@ export default function AuthCallback() {
         if (active) router.replace('/(tabs)');
       } else {
         if (active) {
-          console.warn('Callback page timed out without session.');
+          logger.warn('Callback page timed out without session');
           router.replace('/auth/login');
         }
       }

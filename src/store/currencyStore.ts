@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logger } from '../services/logger';
 
 interface CurrencyStoreState {
   rates: Record<string, number>;
@@ -28,7 +29,7 @@ export const useCurrencyStore = create<CurrencyStoreState>((set, get) => ({
         }
       }
     } catch (error) {
-      console.error('Failed to fetch exchange rates:', error);
+      logger.error('Failed to fetch exchange rates', error);
     }
   },
   convert: (amount: number, from: string, to: string) => {

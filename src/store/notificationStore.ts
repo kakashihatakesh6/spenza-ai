@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../services/logger';
 
 export interface NotificationItem {
   id: string;
@@ -32,7 +33,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         set({ notifications: JSON.parse(stored) });
       }
     } catch (e) {
-      console.warn('Failed to load notifications from AsyncStorage:', e);
+      logger.warn('Failed to load notifications from AsyncStorage', e);
     }
   },
 
@@ -46,7 +47,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       };
       const updated = [newNotification, ...state.notifications];
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
-        console.warn('Failed to save notification to AsyncStorage:', e)
+        logger.warn('Failed to save notification to AsyncStorage', e)
       );
       return { notifications: updated };
     });
@@ -56,7 +57,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     set((state) => {
       const updated = state.notifications.map((n) => ({ ...n, read: true }));
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
-        console.warn('Failed to update notifications in AsyncStorage:', e)
+        logger.warn('Failed to update notifications in AsyncStorage', e)
       );
       return { notifications: updated };
     });
@@ -65,7 +66,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   clearAll: () => {
     set({ notifications: [] });
     AsyncStorage.removeItem(STORAGE_KEY).catch((e) =>
-      console.warn('Failed to clear notifications in AsyncStorage:', e)
+      logger.warn('Failed to clear notifications in AsyncStorage', e)
     );
   },
 
@@ -75,7 +76,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         n.id === id ? { ...n, read: !n.read } : n
       );
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
-        console.warn('Failed to toggle notification in AsyncStorage:', e)
+        logger.warn('Failed to toggle notification in AsyncStorage', e)
       );
       return { notifications: updated };
     });

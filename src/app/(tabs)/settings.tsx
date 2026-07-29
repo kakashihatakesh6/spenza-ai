@@ -255,7 +255,7 @@ export default function SettingsScreen() {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              Customize Spendly's visual appearance to match your style or reduce eye strain.
+              Customize Spendly&apos;s visual appearance to match your style or reduce eye strain.
             </Text>
 
             <View style={styles.optionsList}>

@@ -1,5 +1,5 @@
 import '../utils/suppressWarnings';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { initDatabase } from '../database/database';
@@ -10,12 +10,14 @@ import { useTheme } from '../hooks/useTheme';
 import { useCurrencyStore } from '../store/currencyStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Platform, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Platform, View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { CustomAlertModal } from '../components/CustomAlertModal';
+import { logger } from '../services/logger';
+import { networkMonitor } from '../services/logger/networkMonitor';
 
 // Prevent the native splash screen from auto-hiding before the custom splash screen is mounted
 ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
@@ -41,7 +43,12 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  const [appReadyLogged, setAppReadyLogged] = useState(false);
+  const prevSegments = useRef<string[]>([]);
+
   useEffect(() => {
+    logger.info('App launched');
+
     // 1. Initialize SQLite Database
     initDatabase();
     
@@ -60,7 +67,31 @@ function RootLayoutNav() {
     // 4. Load persisted notification history
     useNotificationStore.getState().loadNotifications();
 
-    if (Platform.OS === 'web') return;
+    // AppState listener
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        logger.info('App resumed');
+      } else if (nextAppState === 'background') {
+        logger.info('App moved to background');
+      }
+    };
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Network status listener
+    const unsubscribeNetwork = networkMonitor.addListener((isOnline) => {
+      if (isOnline) {
+        logger.info('Internet restored');
+      } else {
+        logger.info('Offline detected');
+      }
+    });
+
+    if (Platform.OS === 'web') {
+      return () => {
+        appStateSubscription.remove();
+        unsubscribeNetwork();
+      };
+    }
 
     // 5. Foreground Notification Listener
     const foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
@@ -91,22 +122,50 @@ function RootLayoutNav() {
     });
 
     return () => {
+      appStateSubscription.remove();
+      unsubscribeNetwork();
       foregroundSubscription.remove();
       backgroundSubscription.remove();
     };
   }, []);
 
   useEffect(() => {
+    if (!authLoading && !appReadyLogged) {
+      logger.info('App ready');
+      setAppReadyLogged(true);
+    }
+  }, [authLoading, appReadyLogged]);
+
+  useEffect(() => {
+    const segs = segments as string[];
+    if (segs.length === 0) return;
+
+    const currentPath = segs.join('/');
+    const prevPath = prevSegments.current.join('/');
+    if (currentPath === prevPath) return;
+    prevSegments.current = segs;
+
+    if (segs[0] === '(tabs)') {
+      if (segs[1] === undefined || segs[1] === '') {
+        logger.info('Home screen opened');
+      } else if (segs[1] === 'settings') {
+        logger.info('Settings opened');
+      }
+    }
+  }, [segments]);
+
+  useEffect(() => {
     if (authLoading) return;
 
-    const inAuthGroup = segments[0] === 'auth';
+    const segs = segments as string[];
+    const inAuthGroup = segs[0] === 'auth';
 
     if (!user && !inAuthGroup) {
       // Redirect to login if not authenticated and not in auth screens
       router.replace('/auth/login');
     } else if (user && inAuthGroup) {
       // Redirect to dashboard if authenticated but in auth screens (except when resetting password on forgot-password screen)
-      const isForgotPasswordScreen = segments[1] === 'forgot-password' || segments[1] === 'reset-password';
+      const isForgotPasswordScreen = segs[1] === 'forgot-password' || segs[1] === 'reset-password';
       if (!isForgotPasswordScreen) {
         router.replace('/(tabs)');
       }

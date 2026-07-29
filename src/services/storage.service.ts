@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 const lookup = new Uint8Array(256);
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -62,7 +63,7 @@ export const storageService = {
         );
         processedUri = manipulateResult.uri;
       } catch (compressError) {
-        console.warn('Failed to compress image before upload, using original:', compressError);
+        logger.warn('Failed to compress image before upload, using original', compressError);
       }
     }
 
@@ -115,12 +116,12 @@ export const storageService = {
         allowedMimeTypes: ['image/jpeg', 'image/png'],
       });
       if (error) {
-        console.log('Bucket "profile-pics" status check:', error.message);
+        logger.info('Bucket "profile-pics" status check', { message: error.message });
       } else {
-        console.log('Bucket "profile-pics" created successfully.');
+        logger.info('Bucket "profile-pics" created successfully');
       }
     } catch (e) {
-      console.warn('Failed to ensure profile-pics bucket:', e);
+      logger.warn('Failed to ensure profile-pics bucket', e);
     }
   },
 
@@ -147,7 +148,7 @@ export const storageService = {
         );
         processedUri = manipulateResult.uri;
       } catch (compressError) {
-        console.warn('Failed to compress avatar before upload, using original:', compressError);
+        logger.warn('Failed to compress avatar before upload, using original', compressError);
       }
     }
 
@@ -181,7 +182,7 @@ export const storageService = {
 
     // If 'profile-pics' bucket upload fails (e.g. bucket doesn't exist/unauthorized), fallback to 'receipts' under avatars/ prefix
     if (uploadResult.error) {
-      console.warn(`Upload to '${bucketName}' bucket failed: ${uploadResult.error.message}. Falling back to receipts bucket.`);
+      logger.warn(`Upload to bucket failed, falling back to receipts bucket`, { bucketName, error: uploadResult.error.message });
       bucketName = 'receipts';
       // Store in receipts bucket under avatars/ folder structure
       const fallbackFileName = `avatars/${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -223,10 +224,10 @@ export const storageService = {
         .remove([filePath]);
 
       if (error) {
-        console.warn('Failed to delete receipt from Supabase storage:', error);
+        logger.warn('Failed to delete receipt from Supabase storage', error);
       }
     } catch (err) {
-      console.warn('Error deleting receipt image:', err);
+      logger.warn('Error deleting receipt image', err);
     }
   },
 };

@@ -15,6 +15,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
+import { logger } from '../../services/logger';
 import {
   Sparkles,
   ArrowLeft,
@@ -79,7 +80,7 @@ export default function SubscriptionScreen() {
       );
     } catch (err) {
       setIsProcessing(false);
-      console.error(err);
+      logger.error('Failed to process transaction', err);
       useAlertStore.getState().showAlert('Error', 'Failed to process transaction. Please try again.', 'error');
     }
   };

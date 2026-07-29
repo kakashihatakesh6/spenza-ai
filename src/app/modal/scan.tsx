@@ -27,6 +27,7 @@ import { useAlertStore } from '../../store/alertStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
+import { logger } from '../../services/logger';
 import { Camera as CameraIcon, Check, RefreshCw, Sparkles, X, Image as ImageIcon, ZapOff, Zap, RotateCw } from 'lucide-react-native';
 
 export default function OCRScanModal() {
@@ -127,7 +128,7 @@ export default function OCRScanModal() {
         const { status } = await Camera.requestCameraPermissionsAsync();
         setHasPermission(status === 'granted');
       } catch (err) {
-        console.warn('Failed to get camera permission, assuming denied:', err);
+        logger.warn('Failed to get camera permission, assuming denied', err);
         setHasPermission(false);
       }
     })();
@@ -177,7 +178,7 @@ export default function OCRScanModal() {
         setPhotoUri(photo.uri);
         setPresetName(undefined);
       } catch (captureError: any) {
-        console.warn('Camera capture failed, prompting gallery/demo fallback:', captureError);
+        logger.warn('Camera capture failed, prompting gallery/demo fallback', captureError);
         useAlertStore.getState().showAlert(
           'Camera Capture Failed',
           'Your device camera was unable to capture the image. You can use a demo receipt or pick one from your gallery to test the scanner.',
@@ -227,7 +228,7 @@ export default function OCRScanModal() {
       setPhotoUri(uri);
       setPresetName(undefined);
     } catch (e: any) {
-      console.error(e);
+      logger.error('Gallery Selection Failed', e);
       useAlertStore.getState().showAlert('Gallery Selection Failed', e.message || 'Failed to select image from gallery.', 'error');
     }
   };
@@ -253,7 +254,7 @@ export default function OCRScanModal() {
       
       setIsScanning(false);
     } catch (e: any) {
-      console.error(e);
+      logger.error('OCR Failed', e);
       useAlertStore.getState().showAlert('OCR Failed', e.message || 'Failed to extract text from image. Please try again.', 'error');
       setIsScanning(false);
       setPhotoUri(null);

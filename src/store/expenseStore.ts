@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { Alert } from 'react-native';
 import { Expense, Category, Budget } from '../types';
 import { expenseRepository } from '../database/repositories/expenseRepository';
 import { useAuthStore } from './authStore';
 import { dbService } from '../services/expense.service';
 import { storageService } from '../services/storage.service';
 import { budgetService } from '../services/budget.service';
+import { logger } from '../services/logger';
 
 interface ExpenseState {
   expenses: Expense[];
@@ -50,12 +50,12 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
         set({ expenses, isLoading: false });
       }
     } catch (error) {
-      console.error('Error fetching expenses:', error);
+      logger.error('Error fetching expenses', error);
       // Graceful offline fallback
       try {
         const expenses = expenseRepository.getAllExpenses();
         set({ expenses, isLoading: false });
-      } catch (fallbackError) {
+      } catch {
         set({ isLoading: false });
       }
     }
@@ -66,7 +66,7 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
       const categories = expenseRepository.getAllCategories();
       set({ categories });
     } catch (error) {
-      console.error('Error fetching categories from DB:', error);
+      logger.error('Error fetching categories from DB', error);
     }
   },
 
@@ -80,7 +80,7 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
       } else {
         set({ budgets: [], isLoading: false });
       }
-    } catch (error: any) {
+    } catch {
       set({ budgets: [], isLoading: false });
     }
   },
@@ -90,12 +90,16 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
       const now = new Date().toISOString();
       const user = useAuthStore.getState().user;
       
+      if (expenseData.receiptImage) {
+        logger.info('Receipt attached', { source: 'addExpense' });
+      }
+
       let imageUrl = expenseData.receiptImage;
       if (user && expenseData.receiptImage && !expenseData.receiptImage.startsWith('http')) {
         try {
           imageUrl = await storageService.uploadReceipt(expenseData.receiptImage, user.id);
         } catch (uploadError) {
-          console.error('Failed to upload receipt to storage:', uploadError);
+          logger.error('Failed to upload receipt to storage', uploadError);
         }
       }
 
@@ -122,8 +126,9 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
           expenses: [expense, ...state.expenses],
         }));
       }
+      logger.info('Expense created', { expenseId: expense.id });
     } catch (error) {
-      console.error('Error adding expense:', error);
+      logger.error('Error adding expense', error);
     }
   },
 
@@ -131,18 +136,26 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
     try {
       const now = new Date().toISOString();
       const user = useAuthStore.getState().user;
+      const original = get().expenses.find((e) => e.id === expense.id);
+
+      if (expense.receiptImage && (!original || original.receiptImage !== expense.receiptImage)) {
+        logger.info('Receipt attached', { source: 'updateExpense' });
+      }
+
+      if (original && original.category !== expense.category) {
+        logger.info('Category changed', { from: original.category, to: expense.category });
+      }
 
       let imageUrl = expense.receiptImage;
       
       if (user && expense.receiptImage && !expense.receiptImage.startsWith('http')) {
         try {
-          const original = get().expenses.find((e) => e.id === expense.id);
           if (original?.receiptImage) {
             await storageService.deleteReceipt(original.receiptImage);
           }
           imageUrl = await storageService.uploadReceipt(expense.receiptImage, user.id);
         } catch (uploadError) {
-          console.error('Failed to upload updated receipt to storage:', uploadError);
+          logger.error('Failed to upload updated receipt to storage', uploadError);
         }
       }
 
@@ -165,8 +178,9 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
           expenses: state.expenses.map((e) => (e.id === expense.id ? updatedExpense : e)),
         }));
       }
+      logger.info('Expense updated', { expenseId: expense.id });
     } catch (error) {
-      console.error('Error updating expense:', error);
+      logger.error('Error updating expense', error);
     }
   },
 
@@ -186,8 +200,9 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
       set((state) => ({
         expenses: state.expenses.filter((e) => e.id !== id),
       }));
+      logger.info('Expense deleted', { expenseId: id });
     } catch (error) {
-      console.error('Error deleting expense:', error);
+      logger.error('Error deleting expense', error);
     }
   },
 

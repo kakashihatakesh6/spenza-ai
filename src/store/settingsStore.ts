@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Settings } from '../types';
 import { expenseRepository } from '../database/repositories/expenseRepository';
+import { logger } from '../services/logger';
 
 interface SettingsState {
   settings: Settings;
@@ -28,31 +29,34 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const settings = expenseRepository.getSettings();
       set({ settings });
     } catch (error) {
-      console.error('Error fetching settings from database:', error);
+      logger.error('Error fetching settings from database', error);
     }
   },
   setTheme: (theme) => {
     try {
       expenseRepository.saveSetting('theme', theme);
       set((state) => ({ settings: { ...state.settings, theme } }));
+      logger.info('Theme changed', { theme });
     } catch (error) {
-      console.error('Error saving theme setting:', error);
+      logger.error('Error saving theme setting', error);
     }
   },
   setCurrency: (currency) => {
     try {
       expenseRepository.saveSetting('currency', currency);
       set((state) => ({ settings: { ...state.settings, currency } }));
+      logger.info('Currency changed', { currency });
     } catch (error) {
-      console.error('Error saving currency setting:', error);
+      logger.error('Error saving currency setting', error);
     }
   },
   setNotificationsEnabled: (enabled) => {
     try {
       expenseRepository.saveSetting('notificationsEnabled', String(enabled));
       set((state) => ({ settings: { ...state.settings, notificationsEnabled: enabled } }));
+      logger.info(enabled ? 'Notifications enabled' : 'Notifications disabled');
     } catch (error) {
-      console.error('Error saving notificationsEnabled setting:', error);
+      logger.error('Error saving notificationsEnabled setting', error);
     }
   },
   setNotificationTime: (hour, minute) => {
@@ -66,8 +70,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
           notificationMinute: minute,
         },
       }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving notificationTime setting:', error);
+      logger.error('Error saving notificationTime setting', error);
     }
   },
   setBudgetWarningEnabled: (enabled) => {
@@ -76,8 +81,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       set((state) => ({
         settings: { ...state.settings, budgetWarningEnabled: enabled },
       }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving budgetWarningEnabled setting:', error);
+      logger.error('Error saving budgetWarningEnabled setting', error);
     }
   },
   setBudgetWarningThreshold: (threshold) => {
@@ -86,8 +92,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       set((state) => ({
         settings: { ...state.settings, budgetWarningThreshold: threshold },
       }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving budgetWarningThreshold setting:', error);
+      logger.error('Error saving budgetWarningThreshold setting', error);
     }
   },
 }));

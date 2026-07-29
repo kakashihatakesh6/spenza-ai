@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authService } from '../services/auth.service';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
+import { logger } from '../services/logger';
 
 interface AuthState {
   user: User | null;
@@ -30,7 +31,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
 
       // Listen to auth state changes in real-time
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION' && session) {
+          logger.info('Session restored');
+        } else if (event === 'SIGNED_IN') {
+          logger.info('Session restored');
+        } else if (event === 'SIGNED_OUT') {
+          logger.info('User signed out');
+        } else if (event === 'TOKEN_REFRESHED' && !session) {
+          logger.info('Session expired');
+        }
         set({ 
           session, 
           user: session?.user || null, 
@@ -38,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
       });
     } catch (error) {
-      console.error('Failed to initialize auth:', error);
+      logger.error('Failed to initialize auth', error);
       set({ isLoading: false });
     }
   },
@@ -50,7 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   updateProfile: async (username: string, avatarUrl?: string, extraMetadata?: Record<string, any>) => {
     try {
       // Try to update Supabase if online
-      const { data, error } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         data: { 
           username, 
           avatar_url: avatarUrl, 
@@ -59,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       });
       if (error) {
-        console.warn('Supabase update failed or offline. Updating store state locally.', error);
+        logger.warn('Supabase update failed or offline. Updating store state locally.', error);
       }
       
       // Update local state (works even offline/demo mode)
@@ -84,7 +94,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         };
       });
     } catch (err) {
-      console.error('Failed to update profile:', err);
+      logger.error('Failed to update profile', err);
     }
   },
 
@@ -94,7 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await authService.signOut();
       set({ session: null, user: null, isLoading: false });
     } catch (error) {
-      console.error('Failed to sign out:', error);
+      logger.error('Failed to sign out', error);
       set({ isLoading: false });
     }
   },
