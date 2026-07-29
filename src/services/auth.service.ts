@@ -29,7 +29,9 @@ export const authService = {
 
   // Google Sign-In (OAuth Flow via expo-web-browser)
   async signInWithGoogle() {
-    const redirectUrl = Linking.createURL('auth/callback');
+    const redirectUrl = Platform.OS === 'web'
+      ? Linking.createURL('auth/callback')
+      : 'spendly://auth/callback';
     console.log('====================================');
     console.log('Supabase OAuth Redirect URL:', redirectUrl);
     console.log('====================================');
