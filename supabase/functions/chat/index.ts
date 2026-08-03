@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.21.0';
+import { ChatGoogleGenerativeAI } from 'npm:@langchain/google-genai';
+import { ChatPromptTemplate, MessagesPlaceholder } from 'npm:@langchain/core/prompts';
+import { StringOutputParser } from 'npm:@langchain/core/output_parsers';
+import { RunnableSequence } from 'npm:@langchain/core/runnables';
+import { AIMessage, HumanMessage } from 'npm:@langchain/core/messages';
 import { corsHeaders } from '../_shared/cors.ts';
 import { getSupabaseClient, getServiceClient } from '../_shared/supabaseClient.ts';
 import { generateEmbedding } from '../_shared/embeddingService.ts';
@@ -165,10 +169,13 @@ serve(async (req) => {
       console.error('[Chat Error] Failed to fetch history:', historyError);
     }
 
-    const formattedHistory = (historyMessages || []).map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
-    }));
+    const langChainHistory = (historyMessages || []).map((msg) => {
+      if (msg.role === 'assistant') {
+        return new AIMessage(msg.content);
+      } else {
+        return new HumanMessage(msg.content);
+      }
+    });
 
     // 8. Construct Prompt
     const contextContent = (matchedChunks || [])
@@ -178,11 +185,11 @@ serve(async (req) => {
       })
       .join('\n\n');
 
-    const conversationSummary = conversation.summary
+    const conversationSummaryText = conversation.summary
       ? `Previous conversation summary:\n${conversation.summary}\n\n`
       : '';
 
-    const systemInstruction = `You are Spendly AI, an intelligent, professional financial ledger and document assistant.
+    const systemPromptText = `You are Spendly AI, an intelligent, professional financial ledger and document assistant.
 You help users analyze documents, receipts, budgets, policies, and spreadsheets.
 
 Answer the user's question using ONLY the provided sources/context.
@@ -194,25 +201,37 @@ At the end of your response, output a header "Sources:" followed by a numbered l
 Do not cite sources if you are outputting the fallback "I'm sorry, I cannot find that information..." message.
 
 Context Sources:
-${contextContent || 'No context documents available.'}
+{context}
 
-${conversationSummary}
+{summary}
 Answer the user's question accurately and objectively.`;
 
-    // 9. Initialize Gemini LLM Streaming
-    console.log(`[Chat] Calling Gemini streaming API...`);
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
+    const prompt = ChatPromptTemplate.fromMessages([
+      ['system', systemPromptText],
+      new MessagesPlaceholder('chat_history'),
+      ['human', '{input}'],
+    ]);
+
+    // 9. Initialize Gemini LLM Streaming via LangChain
+    console.log(`[Chat] Calling Gemini streaming API via LangChain...`);
+    const model = new ChatGoogleGenerativeAI({
       model: 'gemini-2.5-flash',
-      systemInstruction: systemInstruction,
+      apiKey: apiKey,
+      streaming: true,
     });
 
-    // Start Chat session with history
-    const chatSession = model.startChat({
-      history: formattedHistory,
-    });
+    const chain = RunnableSequence.from([
+      prompt,
+      model,
+      new StringOutputParser(),
+    ]);
 
-    const resultStream = await chatSession.sendMessageStream(message);
+    const resultStream = await chain.stream({
+      context: contextContent || 'No context documents available.',
+      summary: conversationSummaryText,
+      chat_history: langChainHistory,
+      input: message,
+    });
 
     // Create ReadableStream to send Server-Sent Events (SSE)
     const textEncoder = new TextEncoder();
@@ -226,8 +245,7 @@ Answer the user's question accurately and objectively.`;
         );
 
         try {
-          for await (const chunk of resultStream.stream) {
-            const token = chunk.text();
+          for await (const token of resultStream) {
             if (token) {
               fullResponseText += token;
               // Stream Token Event
@@ -241,7 +259,8 @@ Answer the user's question accurately and objectively.`;
           console.log(`[Chat] Saving message logs to database...`);
           
           // Estimate prompt and completion tokens (rough estimation: 1 token ~ 4 chars)
-          const promptTokens = Math.ceil(systemInstruction.length / 4) + Math.ceil(message.length / 4);
+          const systemPromptTextLength = systemPromptText.length + (contextContent?.length || 0) + conversationSummaryText.length;
+          const promptTokens = Math.ceil(systemPromptTextLength / 4) + Math.ceil(message.length / 4);
           const completionTokens = Math.ceil(fullResponseText.length / 4);
           const totalTokens = promptTokens + completionTokens;
           const tokenUsage = { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens };
@@ -288,10 +307,13 @@ Answer the user's question accurately and objectively.`;
               
             // Fire-and-forget summary request
             try {
-              const summarizerModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+              const summarizerModel = new ChatGoogleGenerativeAI({
+                model: 'gemini-2.5-flash',
+                apiKey: apiKey,
+              });
               const summaryPrompt = `Summarize the key discussion points and context of the following financial chat history concisely in 3-4 sentences. Do not mention specific greetings, just save user queries and policy resolutions:\n\n${allMessagesForSummary}`;
-              const summaryRes = await summarizerModel.generateContent(summaryPrompt);
-              const summaryText = summaryRes.response.text();
+              const summaryRes = await summarizerModel.invoke(summaryPrompt);
+              const summaryText = summaryRes.content;
               
               if (summaryText) {
                 await supabaseAdmin

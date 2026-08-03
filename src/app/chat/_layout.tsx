@@ -26,13 +26,6 @@ export default function ChatLayout() {
           headerShown: false, // We will render a custom header with Back button in the screens
         }}
       />
-      <Stack.Screen
-        name="[id]"
-        options={{
-          title: 'Chat Session',
-          headerShown: false, // Custom header inside chat screen
-        }}
-      />
     </Stack>
   );
 }

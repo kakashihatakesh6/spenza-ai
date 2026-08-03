@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Modal,
+  Animated,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useExpenseStore } from '../../store/expenseStore';
@@ -54,6 +55,24 @@ export default function Dashboard() {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
+
+  const chatScale = React.useRef(new Animated.Value(1)).current;
+
+  const handleChatPressIn = () => {
+    Animated.spring(chatScale, {
+      toValue: 0.88,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleChatPressOut = () => {
+    Animated.spring(chatScale, {
+      toValue: 1,
+      friction: 4,
+      tension: 45,
+      useNativeDriver: true,
+    }).start();
+  };
   
   const { expenses, budgets, categories, fetchExpenses, fetchCategories, fetchBudgets, addExpense, saveBudget, isLoading } =
     useExpenseStore();
@@ -555,20 +574,26 @@ export default function Dashboard() {
     </ScrollView>
 
     {/* Floating Chatbot Button */}
-    <TouchableOpacity
-      style={[
-        styles.chatFloatingBtn,
-        {
-          backgroundColor: colors.accent,
-          shadowColor: colors.accent,
-        },
-      ]}
+    <Pressable
+      onPressIn={handleChatPressIn}
+      onPressOut={handleChatPressOut}
       onPress={() => router.push('/chat' as any)}
-      activeOpacity={0.8}
+      style={styles.chatFloatingBtnWrapper}
     >
-      <Sparkles size={26} color="#FFFFFF" />
-      <View style={styles.pulseBadge} />
-    </TouchableOpacity>
+      <Animated.View
+        style={[
+          styles.chatFloatingBtn,
+          {
+            backgroundColor: colors.accent,
+            shadowColor: colors.accent,
+            transform: [{ scale: chatScale }],
+          },
+        ]}
+      >
+        <Sparkles size={26} color="#FFFFFF" />
+        <View style={styles.pulseBadge} />
+      </Animated.View>
+    </Pressable>
     </View>
   );
 }
@@ -1039,10 +1064,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 8,
   },
-  chatFloatingBtn: {
+  chatFloatingBtnWrapper: {
     position: 'absolute',
     bottom: 24,
     right: 24,
+    zIndex: 999,
+  },
+  chatFloatingBtn: {
     width: 60,
     height: 60,
     borderRadius: 30,

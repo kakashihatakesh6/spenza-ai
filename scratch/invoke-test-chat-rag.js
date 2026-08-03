@@ -3,7 +3,7 @@ require('dotenv').config();
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-const url = `${supabaseUrl}/functions/v1/test-chat-rag`;
+const url = `${supabaseUrl}/functions/v1/test-chat-langchain`;
 
 async function test(query) {
   console.log(`\n----------------------------------------\nTesting Query: "${query}"`);
