@@ -19,6 +19,7 @@ import {
   Cpu,
   Lightbulb,
   Info,
+  MessageSquare,
 } from 'lucide-react-native';
 
 export default function AiHubScreen() {
@@ -144,6 +145,39 @@ export default function AiHubScreen() {
               </View>
               <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>
                 Upload Google Pay, PhonePe, Paytm, or net banking receipts to instantly parser transaction particulars.
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Action 3: AI Chat Assistant */}
+          <TouchableOpacity
+            style={[
+              styles.actionCard,
+              {
+                backgroundColor: isDark ? '#151D30' : '#FFFFFF',
+                borderColor: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.08)',
+                shadowColor: colors.accent,
+              },
+            ]}
+            onPress={() => router.push('/chat' as any)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(139, 92, 246, 0.08)' }]}>
+              <MessageSquare size={26} color={colors.accent} />
+            </View>
+            <View style={styles.actionContent}>
+              <View style={styles.actionHeader}>
+                <Text style={[styles.actionTitle, { color: colors.text }]}>
+                  AI Chat Assistant
+                </Text>
+                <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.08)' }]}>
+                  <Text style={[styles.badgeText, { color: colors.accent }]}>
+                    RAG CORES
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>
+                Ask questions about your uploaded documents, spreadsheets, policies, and ledger data in real-time.
               </Text>
             </View>
           </TouchableOpacity>
