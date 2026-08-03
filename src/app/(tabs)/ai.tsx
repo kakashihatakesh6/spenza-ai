@@ -177,7 +177,7 @@ export default function AiHubScreen() {
                 </View>
               </View>
               <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>
-                Ask questions about your uploaded documents, spreadsheets, policies, and ledger data in real-time.
+                Ask questions about the official Spendly App Knowledge Base and Q&A guide in real-time.
               </Text>
             </View>
           </TouchableOpacity>

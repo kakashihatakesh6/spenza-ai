@@ -19,26 +19,41 @@ async function runTest() {
   // Wait, let's see if we can use a service role key to call it? No, the Edge Function requires user auth getUser().
   // Let's create a temporary user or log in if possible, or print active sessions
   // Wait, let's sign up/in using a test email:
-  const email = `test-rag-${Date.now()}@spendly.ai`;
+  const email = `test-rag-static-user@spendly.ai`;
   const password = "Password123!";
   
-  const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-    email,
-    password
-  });
-
-  if (signUpErr) {
-    console.error("Sign up failed:", signUpErr.message);
+  let session;
+  try {
+    console.log("Trying to sign in with static test user...");
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (signInErr) {
+      console.log("Sign in failed, trying to sign up...");
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+        email,
+        password
+      });
+      if (signUpErr) {
+        throw signUpErr;
+      }
+      session = signUpData.session;
+    } else {
+      session = signInData.session;
+    }
+  } catch (err) {
+    console.error("Auth failed:", err.message);
     return;
   }
 
-  const session = signUpData.session;
   if (!session) {
-    console.error("No session returned from signup.");
+    console.error("No session obtained.");
     return;
   }
 
-  console.log("Successfully signed in as:", email);
+  console.log("Successfully authenticated as:", email);
 
   // 1. Create a conversation first
   const { data: conv, error: convErr } = await supabase
@@ -65,7 +80,7 @@ async function runTest() {
     },
     body: JSON.stringify({
       conversationId: conv.id,
-      message: "tell me about today's expenses"
+      message: "What is Spendly?"
     })
   });
 

@@ -131,7 +131,7 @@ serve(async (req) => {
         query_embedding: questionEmbedding,
         match_threshold: 0.35, // Adjust similarity filter
         match_count: 5, // Retrieve top 5 matching blocks
-        filter_uploaded_by: user.id,
+        filter_uploaded_by: null,
         vector_weight: 0.6,
         full_text_weight: 0.4
       }
@@ -187,14 +187,14 @@ You help users analyze documents, receipts, budgets, policies, and spreadsheets.
 
 Answer the user's question using ONLY the provided sources/context.
 Never fabricate details.
-If the answer cannot be found in the provided sources/context, you MUST reply with exactly: "I'm sorry, I cannot find that information in your uploaded documents."
+If the answer cannot be found in the provided sources/context, you MUST reply with exactly: "I'm sorry, I cannot find that information in the Spendly App Knowledge Base or Q&A guide."
 
 When using information from a source, cite it in the body of your response using brackets, e.g. [1], [2].
 At the end of your response, output a header "Sources:" followed by a numbered list of the sources used (Title, Page/Row).
 Do not cite sources if you are outputting the fallback "I'm sorry, I cannot find that information..." message.
 
 Context Sources:
-${contextContent || 'No context documents uploaded.'}
+${contextContent || 'No context documents available.'}
 
 ${conversationSummary}
 Answer the user's question accurately and objectively.`;

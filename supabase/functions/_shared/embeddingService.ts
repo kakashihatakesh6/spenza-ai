@@ -37,6 +37,7 @@ export async function generateEmbedding(text: string, apiKey: string): Promise<n
     content: {
       parts: [{ text }],
     },
+    outputDimensionality: 768,
   };
 
   const response = await fetchWithRetry(url, {
@@ -75,6 +76,7 @@ export async function generateEmbeddingsBatch(texts: string[], apiKey: string): 
       content: {
         parts: [{ text }],
       },
+      outputDimensionality: 768,
     }));
 
     const response = await fetchWithRetry(url, {

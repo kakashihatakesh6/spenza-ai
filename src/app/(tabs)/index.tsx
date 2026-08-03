@@ -553,6 +553,22 @@ export default function Dashboard() {
         onClose={() => setProfileModalVisible(false)}
       />
     </ScrollView>
+
+    {/* Floating Chatbot Button */}
+    <TouchableOpacity
+      style={[
+        styles.chatFloatingBtn,
+        {
+          backgroundColor: colors.accent,
+          shadowColor: colors.accent,
+        },
+      ]}
+      onPress={() => router.push('/chat' as any)}
+      activeOpacity={0.8}
+    >
+      <Sparkles size={26} color="#FFFFFF" />
+      <View style={styles.pulseBadge} />
+    </TouchableOpacity>
     </View>
   );
 }
@@ -1022,5 +1038,30 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 8,
+  },
+  chatFloatingBtn: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  pulseBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#34D399',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
 });

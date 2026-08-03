@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { chatService, Conversation, ChatMessage, MessageCitation } from '../services/chatService';
-import { documentService, DocumentMetadata } from '../services/documentService';
 import { networkMonitor } from '../services/logger/networkMonitor';
 import { logger } from '../services/logger';
 
@@ -8,7 +7,6 @@ interface ChatState {
   conversations: Conversation[];
   activeConversation: Conversation | null;
   messages: ChatMessage[];
-  documents: DocumentMetadata[];
   
   // Loading & Action states
   isLoadingConvs: boolean;
@@ -16,8 +14,6 @@ interface ChatState {
   isStreaming: boolean;
   streamingMessageText: string;
   streamingCitations: MessageCitation[];
-  uploadProgress: number;
-  isUploading: boolean;
   isOnline: boolean;
   
   // Active stream abort handler
@@ -33,11 +29,6 @@ interface ChatState {
   sendMessage: (messageText: string) => Promise<void>;
   cancelStreaming: () => void;
   
-  // Document actions
-  loadDocuments: (userId: string) => Promise<void>;
-  uploadDocument: (fileUri: string, fileName: string, fileType: string, userId: string) => Promise<void>;
-  deleteDocument: (docId: string, storagePath: string, userId: string) => Promise<void>;
-  
   // Feedback action
   submitFeedback: (messageId: string, isPositive: boolean, feedbackText?: string) => Promise<void>;
 }
@@ -49,15 +40,12 @@ export const useChatStore = create<ChatState>((set, get) => {
     conversations: [],
     activeConversation: null,
     messages: [],
-    documents: [],
     
     isLoadingConvs: false,
     isLoadingMsgs: false,
     isStreaming: false,
     streamingMessageText: '',
     streamingCitations: [],
-    uploadProgress: 0,
-    isUploading: false,
     isOnline: true,
     activeStreamAbort: null,
 
@@ -256,50 +244,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
-    loadDocuments: async (userId: string) => {
-      try {
-        const docs = await documentService.getDocuments(userId);
-        set({ documents: docs });
-      } catch (err) {
-        logger.error('Store: failed to load documents', err);
-      }
-    },
 
-    uploadDocument: async (fileUri: string, fileName: string, fileType: string, userId: string) => {
-      try {
-        set({ isUploading: true, uploadProgress: 0.1 });
-        
-        await documentService.uploadDocument(
-          fileUri,
-          fileName,
-          fileType,
-          userId,
-          (progress) => {
-            set({ uploadProgress: progress });
-          }
-        );
-
-        // Re-load document list
-        const docs = await documentService.getDocuments(userId);
-        set({ documents: docs, isUploading: false, uploadProgress: 0 });
-      } catch (err) {
-        logger.error('Store: failed to upload document', err);
-        set({ isUploading: false, uploadProgress: 0 });
-        throw err;
-      }
-    },
-
-    deleteDocument: async (docId: string, storagePath: string, userId: string) => {
-      try {
-        await documentService.deleteDocument(docId, storagePath);
-        // Re-load documents list
-        const docs = await documentService.getDocuments(userId);
-        set({ documents: docs });
-      } catch (err) {
-        logger.error('Store: failed to delete document', err);
-        throw err;
-      }
-    },
 
     submitFeedback: async (messageId: string, isPositive: boolean, feedbackText?: string) => {
       try {
