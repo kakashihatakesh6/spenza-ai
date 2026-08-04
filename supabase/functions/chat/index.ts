@@ -8,6 +8,7 @@ import { AIMessage, HumanMessage } from 'npm:@langchain/core/messages';
 import { corsHeaders } from '../_shared/cors.ts';
 import { getSupabaseClient, getServiceClient } from '../_shared/supabaseClient.ts';
 import { generateEmbedding } from '../_shared/embeddingService.ts';
+import { ensureIngested } from './ingest.ts';
 
 serve(async (req) => {
   // Handle CORS preflight options
@@ -66,7 +67,11 @@ serve(async (req) => {
       });
     }
 
-    // 4. Rate Limiting (Per-user limit: Max 10 queries per minute, 50,000 daily tokens)
+    // 4. Run Automatic Ingestion Pipeline
+    console.log(`[Chat] Checking knowledge base documents ingestion status...`);
+    await ensureIngested(supabaseAdmin, apiKey);
+
+    // 5. Rate Limiting (Per-user limit: Max 10 queries per minute, 50,000 daily tokens)
     const { data: userConvs } = await supabaseAdmin
       .from('chat_conversations')
       .select('id')
@@ -122,42 +127,139 @@ serve(async (req) => {
       }
     }
 
-    // 5. Generate Question Embedding
-    console.log(`[Chat] Generating embedding for user question...`);
-    const questionEmbedding = await generateEmbedding(message, apiKey);
+    // 6. Intelligent Query Router
+    let route = 'RAG';
+    const classificationPrompt = `You are a query router. Classify the user query into one of these categories:
+- "DATABASE": Questions asking about the user's specific financial data, transactions, expenses, budget, savings, spending totals, categories, or recent logs.
+- "RAG": Questions asking about the Spendly app itself, its features, OCR receipt scanner, UPI screenshot detection, offline mode, rate limits, guides, FAQ, or how to use the app.
+- "BOTH": Questions that require querying the database for user data AND reference the Spendly app's knowledge base.
+- "GENERAL": General chit-chat or questions that don't fit any of the above.
 
-    // 6. Similarity Vector & Keyword Hybrid Search
-    console.log(`[Chat] Querying matching document chunks using hybrid search...`);
-    const { data: matchedChunks, error: searchError } = await supabaseAdmin.rpc(
-      'match_document_chunks_hybrid',
-      {
-        query_text: message,
-        query_embedding: questionEmbedding,
-        match_threshold: 0.35, // Adjust similarity filter
-        match_count: 5, // Retrieve top 5 matching blocks
-        filter_uploaded_by: null,
-        vector_weight: 0.6,
-        full_text_weight: 0.4
+Query: "${message}"
+
+Respond with ONLY one word from: DATABASE, RAG, BOTH, GENERAL.`;
+
+    try {
+      const classifierRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: classificationPrompt }] }]
+        })
+      });
+      if (classifierRes.ok) {
+        const data = await classifierRes.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() || '';
+        if (text.includes('DATABASE')) route = 'DATABASE';
+        else if (text.includes('RAG')) route = 'RAG';
+        else if (text.includes('BOTH')) route = 'BOTH';
+        else if (text.includes('GENERAL')) route = 'GENERAL';
       }
-    );
-
-    if (searchError) {
-      console.error('[Chat Error] Hybrid search failed:', searchError);
-      throw new Error(`Vector search failed: ${searchError.message}`);
+    } catch (e) {
+      console.warn('[Chat Router] Gemini classifier failed. Using keyword fallback.', e);
+      // Fallback keyword match
+      const text = message.toLowerCase();
+      const dbKeywords = ['spend', 'spent', 'budget', 'transaction', 'category', 'categories', 'report', 'chart', 'analytic', 'save', 'saving', 'expense', 'cost', 'price', 'buy', 'bought', 'pay', 'paid', 'july', 'august', 'month', 'recent'];
+      const ragKeywords = ['spendly', 'faq', 'ocr', 'receipt', 'screenshot', 'upi', 'app', 'usage', 'documentation', 'doc', 'guide', 'manual', 'policy', 'policies', 'help', 'knowledge', 'kb'];
+      
+      const matchesDb = dbKeywords.some(kw => text.includes(kw));
+      const matchesRag = ragKeywords.some(kw => text.includes(kw));
+      
+      if (matchesDb && matchesRag) route = 'BOTH';
+      else if (matchesDb) route = 'DATABASE';
+      else if (matchesRag) route = 'RAG';
+      else route = 'GENERAL';
     }
 
-    const citations = (matchedChunks || []).map((chunk: any) => ({
-      chunk_id: chunk.chunk_id,
-      title: chunk.document_title || chunk.document_filename,
-      filename: chunk.document_filename,
-      page_number: chunk.page_number,
-      section: chunk.section,
-      similarity: chunk.similarity,
-    }));
+    console.log(`[Chat Router] Query: "${message}" -> Route: ${route}`);
 
-    console.log(`[Chat] Found ${citations.length} related context chunks.`);
+    // 7. Context Retrieval based on Route
+    let databaseContext = 'No personal financial data was retrieved for this request.\n';
+    let documentContext = 'No relevant knowledge base documents available.\n';
+    let citations = [];
 
-    // 7. Retrieve Chat History
+    // Route: Query user database
+    if (route === 'DATABASE' || route === 'BOTH') {
+      try {
+        console.log(`[Chat] Fetching user transaction data (respecting RLS)...`);
+        const { data: expenses, error: expensesError } = await supabaseClient
+          .from('expenses')
+          .select('amount, merchant, category, currency, transaction_date, notes')
+          .order('transaction_date', { ascending: false });
+
+        if (expensesError) {
+          console.error('[Chat Error] Failed to fetch user data:', expensesError);
+        } else {
+          const budgets = user.user_metadata?.budgets || [];
+          databaseContext = `User's Registered Budgets (stored in user metadata):
+${budgets.length > 0 ? JSON.stringify(budgets, null, 2) : 'No budgets registered.'}
+
+User's Expense/Transaction Logs (Total: ${expenses.length}):
+${expenses.length > 0 
+  ? expenses.map(e => `- Date: ${e.transaction_date}, Merchant: ${e.merchant}, Amount: ${e.amount} ${e.currency}, Category: ${e.category}${e.notes ? ` (Notes: ${e.notes})` : ''}`).join('\n')
+  : 'No transaction logs found.'}
+`;
+        }
+      } catch (dbErr) {
+        console.error('[Chat Error] Database context fetch error:', dbErr);
+      }
+    }
+
+    // Route: Query pgvector RAG
+    if (route === 'RAG' || route === 'BOTH') {
+      try {
+        console.log(`[Chat] Generating embedding for user question...`);
+        const questionEmbedding = await generateEmbedding(message, apiKey);
+
+        console.log(`[Chat] Querying matching document chunks using hybrid search...`);
+        const { data: matchedChunks, error: searchError } = await supabaseAdmin.rpc(
+          'match_document_chunks_hybrid',
+          {
+            query_text: message,
+            query_embedding: questionEmbedding,
+            match_threshold: 0.35, // Cosine similarity confidence threshold
+            match_count: 5,       // Top-K relevant chunks
+            filter_uploaded_by: null,
+            vector_weight: 0.6,
+            full_text_weight: 0.4
+          }
+        );
+
+        if (searchError) {
+          console.error('[Chat Error] Hybrid search failed:', searchError);
+        } else if (matchedChunks && matchedChunks.length > 0) {
+          // Remove duplicate chunks
+          const seen = new Set();
+          const uniqueChunks = [];
+          for (const chunk of matchedChunks) {
+            if (!seen.has(chunk.chunk_text)) {
+              seen.add(chunk.chunk_text);
+              uniqueChunks.push(chunk);
+            }
+          }
+
+          citations = uniqueChunks.map((chunk: any) => ({
+            chunk_id: chunk.chunk_id,
+            title: chunk.document_title || chunk.document_filename,
+            filename: chunk.document_filename,
+            page_number: chunk.page_number,
+            section: chunk.section,
+            similarity: chunk.similarity,
+          }));
+
+          documentContext = uniqueChunks
+            .map((chunk: any, i: number) => {
+              const sourceLabel = `[Source ${i + 1}: ${chunk.document_title || chunk.document_filename} (Page/Row ${chunk.page_number || 'N/A'})]`;
+              return `${sourceLabel}\n${chunk.chunk_text}`;
+            })
+            .join('\n\n');
+        }
+      } catch (ragErr) {
+        console.error('[Chat Error] pgvector RAG retrieval error:', ragErr);
+      }
+    }
+
+    // 8. Retrieve Chat History
     const { data: historyMessages, error: historyError } = await supabaseAdmin
       .from('chat_messages')
       .select('role, content')
@@ -177,33 +279,41 @@ serve(async (req) => {
       }
     });
 
-    // 8. Construct Prompt
-    const contextContent = (matchedChunks || [])
-      .map((chunk: any, i: number) => {
-        const sourceLabel = `[Source ${i + 1}: ${chunk.document_title || chunk.document_filename} (Page/Row ${chunk.page_number || 'N/A'})]`;
-        return `${sourceLabel}\n${chunk.chunk_text}`;
-      })
-      .join('\n\n');
-
     const conversationSummaryText = conversation.summary
       ? `Previous conversation summary:\n${conversation.summary}\n\n`
       : '';
 
+    // 9. Construct System Prompt
     const systemPromptText = `You are Spendly AI, an intelligent, professional financial ledger and document assistant.
-You help users analyze documents, receipts, budgets, policies, and spreadsheets.
+You help users analyze documents, receipts, budgets, policies, and spreadsheets, as well as their own financial data (expenses, budgets, savings, transactions).
 
-Answer the user's question using ONLY the provided sources/context.
-Never fabricate details.
-If the answer cannot be found in the provided sources/context, you MUST reply with exactly: "I'm sorry, I cannot find that information in the Spendly App Knowledge Base or Q&A guide."
+Here is the current date and time context:
+Current Date/Time: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 
-When using information from a source, cite it in the body of your response using brackets, e.g. [1], [2].
-At the end of your response, output a header "Sources:" followed by a numbered list of the sources used (Title, Page/Row).
-Do not cite sources if you are outputting the fallback "I'm sorry, I cannot find that information..." message.
+You have access to two types of context sources:
+1. PERSONAL FINANCIAL DATA (if relevant): The authenticated user's actual expenses and budgets.
+2. SPENDLY KNOWLEDGE BASE DOCUMENTS (if relevant): Facts about the Spendly app features, FAQs, OCR scanner, offline syncing, etc.
 
-Context Sources:
-{context}
+=== CONTEXT SOURCES ===
+--- PERSONAL FINANCIAL DATA ---
+{database_context}
 
-{summary}
+--- SPENDLY KNOWLEDGE BASE DOCUMENTS ---
+{document_context}
+=======================
+
+CRITICAL RULES:
+1. When answering questions about user transactions, expenses, budgets, categories, or savings, rely ONLY on the "PERSONAL FINANCIAL DATA" context. Never make up transactions or numbers. Respect the user's privacy and default to their listed currency.
+   - If the user asks about savings, calculate it as Total Income minus Total Expenses. A transaction is considered income if its category contains "salary" or "income" (case-insensitive); other transactions are expenses.
+   - If the user asks about budgets, compare their total category spending against their budgets in user metadata.
+2. When answering questions about Spendly features, FAQs, app usage, OCR, policies, or documentation, rely ONLY on the "SPENDLY KNOWLEDGE BASE DOCUMENTS" context.
+   - When using information from these documents, cite the source in the body of your response using brackets, e.g. [1], [2].
+   - At the end of your response, output a header "Sources:" followed by a numbered list of the sources used (Title, Page/Row).
+   - If the answer cannot be found in the provided sources/context, you MUST reply with exactly: "I'm sorry, I cannot find that information in the Spendly App Knowledge Base or Q&A guide."
+3. Do not cite sources if you are outputting the fallback "I'm sorry, I cannot find that information..." message.
+4. If a question requires both personal financial data and Spendly app guidelines, integrate both cleanly in a single, comprehensive response.
+5. If the question is a general greeting or completely unrelated, respond politely as a helpful financial assistant, but state that you are designed to assist with Spendly app features and personal expense tracking.
+
 Answer the user's question accurately and objectively.`;
 
     const prompt = ChatPromptTemplate.fromMessages([
@@ -212,7 +322,7 @@ Answer the user's question accurately and objectively.`;
       ['human', '{input}'],
     ]);
 
-    // 9. Initialize Gemini LLM Streaming via LangChain
+    // 10. Initialize Gemini LLM Streaming via LangChain
     console.log(`[Chat] Calling Gemini streaming API via LangChain...`);
     const model = new ChatGoogleGenerativeAI({
       model: 'gemini-2.5-flash',
@@ -227,7 +337,8 @@ Answer the user's question accurately and objectively.`;
     ]);
 
     const resultStream = await chain.stream({
-      context: contextContent || 'No context documents available.',
+      database_context: databaseContext,
+      document_context: documentContext,
       summary: conversationSummaryText,
       chat_history: langChainHistory,
       input: message,
@@ -255,11 +366,11 @@ Answer the user's question accurately and objectively.`;
             }
           }
 
-          // 10. Save User Message & Assistant Response in Database
+          // 11. Save User Message & Assistant Response in Database
           console.log(`[Chat] Saving message logs to database...`);
           
           // Estimate prompt and completion tokens (rough estimation: 1 token ~ 4 chars)
-          const systemPromptTextLength = systemPromptText.length + (contextContent?.length || 0) + conversationSummaryText.length;
+          const systemPromptTextLength = systemPromptText.length + (databaseContext?.length || 0) + (documentContext?.length || 0) + conversationSummaryText.length;
           const promptTokens = Math.ceil(systemPromptTextLength / 4) + Math.ceil(message.length / 4);
           const completionTokens = Math.ceil(fullResponseText.length / 4);
           const totalTokens = promptTokens + completionTokens;
@@ -299,7 +410,7 @@ Answer the user's question accurately and objectively.`;
             .update({ updated_at: new Date().toISOString() })
             .eq('id', conversationId);
 
-          // Asynchronous Conversation Summarization (trigger if history > 10 messages)
+          // Asynchronous Conversation Summarization (trigger if history > 8 messages)
           if ((historyMessages?.length || 0) >= 8) {
             const allMessagesForSummary = [...(historyMessages || []), { role: 'user', content: message }, { role: 'assistant', content: fullResponseText }]
               .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
