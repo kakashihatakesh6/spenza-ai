@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { ChatGoogleGenerativeAI } from 'npm:@langchain/google-genai';
+import { ChatOpenAI } from 'npm:@langchain/openai';
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from 'npm:@langchain/core/messages';
 import { corsHeaders } from '../_shared/cors.ts';
 import { getSupabaseClient, getServiceClient } from '../_shared/supabaseClient.ts';
@@ -17,9 +17,14 @@ serve(async (req) => {
   const startTimeMs = Date.now();
 
   try {
-    const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('EXPO_PUBLIC_GEMINI_API_KEY') || '';
-    if (!apiKey) {
-      throw new Error('Gemini API key is not configured on the server.');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('EXPO_PUBLIC_GEMINI_API_KEY') || '';
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key is not configured on the server for embeddings.');
+    }
+
+    const groqApiKey = Deno.env.get('GROQ_API_KEY') || Deno.env.get('EXPO_PUBLIC_GROQ_API_KEY') || '';
+    if (!groqApiKey) {
+      throw new Error('Groq API key is not configured on the server. Please set GROQ_API_KEY.');
     }
 
     // 1. Authenticate the User
@@ -76,7 +81,7 @@ serve(async (req) => {
     }
 
     // 4. Run Automatic Ingestion Pipeline
-    await ensureIngested(supabaseAdmin, apiKey);
+    await ensureIngested(supabaseAdmin, geminiApiKey);
 
     // 5. Rate Limiting (Per-user limit: Max 10 queries per minute, 50,000 daily tokens)
     const { data: userConvs } = await supabaseAdmin
@@ -162,7 +167,7 @@ serve(async (req) => {
       supabaseClient,
       supabaseAdmin,
       userId: user.id,
-      apiKey,
+      apiKey: geminiApiKey,
       onCitationsCollected: (cits) => {
         collectedCitations = [...collectedCitations, ...cits];
       },
@@ -194,10 +199,13 @@ MANDATORY RULES:
 3. When search_knowledge_base is used, cite documentation sources using brackets like [1], [2].
 4. Always be professional, clear, accurate, and concise.`;
 
-    // 9. Initialize Gemini Model with Tool Binding
-    const llm = new ChatGoogleGenerativeAI({
-      model: 'gemini-3.6-flash',
-      apiKey: apiKey,
+    // 9. Initialize Groq Model with Tool Binding (openai/gpt-oss-120b)
+    const llm = new ChatOpenAI({
+      modelName: 'openai/gpt-oss-120b',
+      apiKey: groqApiKey,
+      configuration: {
+        baseURL: 'https://api.groq.com/openai/v1',
+      },
       temperature: 0.2
     });
 
@@ -321,9 +329,12 @@ MANDATORY RULES:
           // Summarize conversation history if > 8 messages
           if ((historyMessages?.length || 0) >= 8) {
             try {
-              const summarizerModel = new ChatGoogleGenerativeAI({
-                model: 'gemini-3.6-flash',
-                apiKey: apiKey,
+              const summarizerModel = new ChatOpenAI({
+                modelName: 'openai/gpt-oss-120b',
+                apiKey: groqApiKey,
+                configuration: {
+                  baseURL: 'https://api.groq.com/openai/v1',
+                },
               });
               const summaryPrompt = `Concisely summarize key details and user preferences of this financial chat history in 3 sentences:\n\n${fullResponseText}`;
               const summaryRes = await summarizerModel.invoke(summaryPrompt);
