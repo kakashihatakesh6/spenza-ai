@@ -209,7 +209,6 @@ MANDATORY RULES:
       ...langChainHistory,
       new HumanMessage(message)
     ];
-
     let finalStreamResult: any = null;
     let toolExecutionCount = 0;
     const MAX_TOOL_LOOPS = 5;
