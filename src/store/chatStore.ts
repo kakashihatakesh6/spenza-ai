@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { chatService, Conversation, ChatMessage, MessageCitation } from '../services/chatService';
 import { networkMonitor } from '../services/logger/networkMonitor';
 import { logger } from '../services/logger';
+import { useAuthStore } from './authStore';
+import { useExpenseStore } from './expenseStore';
 
 interface ChatState {
   conversations: Conversation[];
@@ -206,6 +208,17 @@ export const useChatStore = create<ChatState>((set, get) => {
           
           // Re-load conversation list to update titles/summary/updated_at
           get().loadConversations();
+
+          // INSTANTLY refresh User Profile, Budgets, and Expenses across the app!
+          try {
+            await useAuthStore.getState().refreshUser();
+            await Promise.all([
+              useExpenseStore.getState().fetchBudgets(),
+              useExpenseStore.getState().fetchExpenses(),
+            ]);
+          } catch (refreshErr) {
+            logger.error('Failed to auto-refresh app stores after chat stream done', refreshErr);
+          }
         },
         (error) => {
           logger.error('Store: error during message streaming', error);

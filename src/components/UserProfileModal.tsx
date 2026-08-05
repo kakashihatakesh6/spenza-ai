@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -47,6 +47,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
+  const refreshUser = useAuthStore((state) => state.refreshUser);
+
+  useEffect(() => {
+    if (visible) {
+      refreshUser();
+    }
+  }, [visible]);
 
   const monthlySpend = expenseHelpers.getMonthlySpend(expenses);
 

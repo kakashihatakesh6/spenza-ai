@@ -24,13 +24,15 @@ export default function BudgetModal() {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
 
+  const { budgets, categories, saveBudget, deleteBudget, fetchBudgets } = useExpenseStore();
+  const { settings } = useSettingsStore();
+
   useEffect(() => {
     navigation.setOptions({
       headerShown: false,
     });
+    fetchBudgets();
   }, [navigation]);
-  const { budgets, categories, saveBudget, deleteBudget } = useExpenseStore();
-  const { settings } = useSettingsStore();
 
   // Form states
   const [selectedCategory, setSelectedCategory] = useState('All');
