@@ -33,6 +33,10 @@ import {
   Scan,
   TrendingUp,
   MessageSquare,
+  Bot,
+  BarChart3,
+  Wallet,
+  User,
 } from 'lucide-react-native';
 
 // Entry animation for message items
@@ -92,10 +96,30 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
   }, []);
 
   const suggestions = [
-    { text: "What is Spendly?", desc: "Learn about app architecture & offline storage.", icon: Sparkles, color: '#8B5CF6' },
-    { text: "How does receipt scanning work?", desc: "Understand receipt OCR & item extraction.", icon: Scan, color: '#3B82F6' },
-    { text: "What categories are supported?", desc: "See category limits & budget settings.", icon: TrendingUp, color: '#10B981' },
-    { text: "What are the chat rate limits?", desc: "Check maximum messages & token budgets.", icon: Info, color: '#EF4444' },
+    {
+      text: "What is Spendly?",
+      desc: "Learn about app architecture & offline storage.",
+      icon: Sparkles,
+      color: '#8B5CF6'
+    },
+    {
+      text: "Show my July summary.",
+      desc: "Analyze total spending & category breakdown for July.",
+      icon: BarChart3,
+      color: '#3B82F6'
+    },
+    {
+      text: "Increase my food budget to ₹6000 and tell me how much I spent on food last month.",
+      desc: "Update monthly Food budget & check previous spending.",
+      icon: Wallet,
+      color: '#10B981'
+    },
+    {
+      text: "My monthly income is ₹90,000. Change my name to Nikhil",
+      desc: "Update profile income settings & display username.",
+      icon: User,
+      color: '#F59E0B'
+    },
   ];
 
   const { colors, isDark } = useTheme();
@@ -141,7 +165,7 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
                 <View style={[styles.suggestionIconBg, { backgroundColor: item.color + '18' }]}>
                   <IconComp size={18} color={item.color} />
                 </View>
-                <Text style={[styles.suggestionCardTitle, { color: colors.text }]} numberOfLines={2}>
+                <Text style={[styles.suggestionCardTitle, { color: colors.text }]} numberOfLines={3}>
                   {item.text}
                 </Text>
                 <Text style={[styles.suggestionCardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -834,7 +858,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1.5,
-    minHeight: 125,
+    minHeight: 140,
   },
   suggestionIconBg: {
     width: 32,
