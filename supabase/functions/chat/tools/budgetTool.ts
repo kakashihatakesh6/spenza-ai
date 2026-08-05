@@ -3,13 +3,13 @@ import { tool } from 'npm:@langchain/core/tools';
 import { z } from 'npm:zod@^3.22.4';
 import { Logger } from '../observability.ts';
 
-export function createBudgetTools(supabaseClient: any, userId: string, onLog?: (entry: any) => void) {
+export function createBudgetTools(supabaseAdmin: any, userId: string, onLog?: (entry: any) => void) {
   const getBudgetsTool = tool(
     async () => {
       const startTime = Date.now();
       try {
         Logger.info(`[GetBudgetsTool] Fetching budgets for user: ${userId}`);
-        const { data: userData, error: getUserErr } = await supabaseClient.auth.getUser();
+        const { data: userData, error: getUserErr } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (getUserErr || !userData?.user) {
           throw new Error(`Failed to fetch user metadata: ${getUserErr?.message || 'User not found'}`);
         }
@@ -43,7 +43,7 @@ export function createBudgetTools(supabaseClient: any, userId: string, onLog?: (
           throw new Error('Budget amount must be a positive number.');
         }
 
-        const { data: userData, error: getUserErr } = await supabaseClient.auth.getUser();
+        const { data: userData, error: getUserErr } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (getUserErr || !userData?.user) {
           throw new Error(`Failed to fetch user metadata: ${getUserErr?.message || 'User not found'}`);
         }
@@ -77,8 +77,8 @@ export function createBudgetTools(supabaseClient: any, userId: string, onLog?: (
           currentBudgets.push(updatedBudgetItem);
         }
 
-        const { error: updateErr } = await supabaseClient.auth.updateUser({
-          data: {
+        const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          user_metadata: {
             ...metadata,
             budgets: currentBudgets
           }

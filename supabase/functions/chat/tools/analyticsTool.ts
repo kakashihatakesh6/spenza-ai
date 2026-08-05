@@ -3,7 +3,7 @@ import { tool } from 'npm:@langchain/core/tools';
 import { z } from 'npm:zod@^3.22.4';
 import { Logger } from '../observability.ts';
 
-export function createAnalyticsTools(supabaseClient: any, userId: string, onLog?: (entry: any) => void) {
+export function createAnalyticsTools(supabaseClient: any, supabaseAdmin: any, userId: string, onLog?: (entry: any) => void) {
   const getAnalyticsTool = tool(
     async (input) => {
       const startTime = Date.now();
@@ -22,7 +22,7 @@ export function createAnalyticsTools(supabaseClient: any, userId: string, onLog?
 
         const allExpenses = expenses || [];
 
-        const { data: userData } = await supabaseClient.auth.getUser();
+        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
         const metadata = userData?.user?.user_metadata || {};
         const monthlyIncomeSetting = metadata.monthly_income ?? metadata.income ?? 0;
         const currency = metadata.preferred_currency ?? metadata.currency ?? 'INR';

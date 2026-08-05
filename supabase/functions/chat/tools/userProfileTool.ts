@@ -3,13 +3,13 @@ import { tool } from 'npm:@langchain/core/tools';
 import { z } from 'npm:zod@^3.22.4';
 import { Logger } from '../observability.ts';
 
-export function createUserProfileTools(supabaseClient: any, userId: string, onLog?: (entry: any) => void) {
+export function createUserProfileTools(supabaseAdmin: any, userId: string, onLog?: (entry: any) => void) {
   const getProfileTool = tool(
     async () => {
       const startTime = Date.now();
       try {
         Logger.info(`[GetUserProfileTool] Fetching profile for user: ${userId}`);
-        const { data: userData, error: getUserErr } = await supabaseClient.auth.getUser();
+        const { data: userData, error: getUserErr } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (getUserErr || !userData?.user) {
           throw new Error(`Failed to retrieve user profile: ${getUserErr?.message || 'User not found'}`);
         }
@@ -48,7 +48,7 @@ export function createUserProfileTools(supabaseClient: any, userId: string, onLo
       const startTime = Date.now();
       try {
         Logger.info(`[UpdateUserProfileTool] Updating profile for user: ${userId}`, input);
-        const { data: userData, error: getUserErr } = await supabaseClient.auth.getUser();
+        const { data: userData, error: getUserErr } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (getUserErr || !userData?.user) {
           throw new Error(`Failed to retrieve user profile: ${getUserErr?.message || 'User not found'}`);
         }
@@ -95,8 +95,8 @@ export function createUserProfileTools(supabaseClient: any, userId: string, onLo
           return JSON.stringify({ success: false, message: 'No profile fields provided to update.' });
         }
 
-        const { error: updateErr } = await supabaseClient.auth.updateUser({
-          data: updatedMetadata
+        const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          user_metadata: updatedMetadata
         });
 
         if (updateErr) {

@@ -1,6 +1,16 @@
 // @ts-nocheck
 import { parseDocument } from '../_shared/documentParser.ts';
 import { generateEmbeddingsBatch } from '../_shared/embeddingService.ts';
+import { EMBEDDED_ASSETS } from './assets/embeddedAssets.ts';
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
 
 // Global variable to cache ingestion status during container lifetime
 let isIngested = false;
@@ -33,13 +43,17 @@ export async function ensureIngested(supabaseAdmin: any, apiKey: string) {
     ];
 
     for (const docInfo of documentsToIngest) {
-      // 1. Read local file from assets
+      // 1. Read local file from assets, falling back to embedded assets if Deno.readFile path is missing in runtime
       let fileBytes: Uint8Array;
       try {
         fileBytes = await Deno.readFile(docInfo.url);
-      } catch (readErr) {
-        console.error(`[Ingest Error] Failed to read local file ${docInfo.filename}:`, readErr);
-        continue;
+      } catch (_readErr) {
+        if (EMBEDDED_ASSETS[docInfo.filename]) {
+          fileBytes = base64ToUint8Array(EMBEDDED_ASSETS[docInfo.filename]);
+        } else {
+          console.error(`[Ingest Error] Failed to read local file ${docInfo.filename} and no embedded fallback found.`);
+          continue;
+        }
       }
       
       // 2. Calculate SHA-256 hash to detect changes

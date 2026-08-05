@@ -28,11 +28,11 @@ export function getAgentTools(options: ToolRegistryOptions) {
     onToolExecuted
   } = options;
 
-  const profileTools = createUserProfileTools(supabaseClient, userId, onToolExecuted);
+  const profileTools = createUserProfileTools(supabaseAdmin, userId, onToolExecuted);
   const transactionTools = createTransactionTools(supabaseClient, userId, onToolExecuted);
-  const analyticsTools = createAnalyticsTools(supabaseClient, userId, onToolExecuted);
+  const analyticsTools = createAnalyticsTools(supabaseClient, supabaseAdmin, userId, onToolExecuted);
   const knowledgeTools = createKnowledgeRetrievalTools(supabaseAdmin, apiKey, onCitationsCollected, onToolExecuted);
-  const budgetTools = createBudgetTools(supabaseClient, userId, onToolExecuted);
+  const budgetTools = createBudgetTools(supabaseAdmin, userId, onToolExecuted);
 
   return [
     ...profileTools,
