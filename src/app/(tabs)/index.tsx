@@ -49,6 +49,7 @@ import {
 import { TransactionCard } from '../../components/transactions/TransactionCard';
 import { TransactionDetailModal } from '../../components/TransactionDetailModal';
 import { UserProfileModal } from '../../components/UserProfileModal';
+import { BotAvatar } from '../../components/BotAvatar';
 import { Expense } from '../../types';
 
 export default function Dashboard() {
@@ -581,17 +582,11 @@ export default function Dashboard() {
       style={styles.chatFloatingBtnWrapper}
     >
       <Animated.View
-        style={[
-          styles.chatFloatingBtn,
-          {
-            backgroundColor: colors.accent,
-            shadowColor: colors.accent,
-            transform: [{ scale: chatScale }],
-          },
-        ]}
+        style={{
+          transform: [{ scale: chatScale }],
+        }}
       >
-        <Sparkles size={26} color="#FFFFFF" />
-        <View style={styles.pulseBadge} />
+        <BotAvatar size={58} variant="fab" showPulse={true} pulseColor="#10B981" />
       </Animated.View>
     </Pressable>
     </View>
