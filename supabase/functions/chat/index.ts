@@ -1,20 +1,20 @@
 // @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { ChatGoogleGenerativeAI } from 'npm:@langchain/google-genai';
-import { ChatPromptTemplate, MessagesPlaceholder } from 'npm:@langchain/core/prompts';
-import { StringOutputParser } from 'npm:@langchain/core/output_parsers';
-import { RunnableSequence } from 'npm:@langchain/core/runnables';
-import { AIMessage, HumanMessage } from 'npm:@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from 'npm:@langchain/core/messages';
 import { corsHeaders } from '../_shared/cors.ts';
 import { getSupabaseClient, getServiceClient } from '../_shared/supabaseClient.ts';
-import { generateEmbedding } from '../_shared/embeddingService.ts';
 import { ensureIngested } from './ingest.ts';
+import { getAgentTools } from './tools/registry.ts';
+import { Logger, AgentMetrics, ToolLogEntry } from './observability.ts';
 
 serve(async (req) => {
   // Handle CORS preflight options
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  const startTimeMs = Date.now();
 
   try {
     const apiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('EXPO_PUBLIC_GEMINI_API_KEY') || '';
@@ -52,6 +52,14 @@ serve(async (req) => {
 
     const supabaseAdmin = getServiceClient();
 
+    // Initialize Telemetry Metrics
+    const metrics: AgentMetrics = {
+      userId: user.id,
+      conversationId: conversationId,
+      startTimeMs,
+      toolsCalled: []
+    };
+
     // 3. Verify conversation ownership
     const { data: conversation, error: convError } = await supabaseAdmin
       .from('chat_conversations')
@@ -68,7 +76,6 @@ serve(async (req) => {
     }
 
     // 4. Run Automatic Ingestion Pipeline
-    console.log(`[Chat] Checking knowledge base documents ingestion status...`);
     await ensureIngested(supabaseAdmin, apiKey);
 
     // 5. Rate Limiting (Per-user limit: Max 10 queries per minute, 50,000 daily tokens)
@@ -80,7 +87,6 @@ serve(async (req) => {
     const convIds = userConvs?.map((c) => c.id) || [];
 
     if (convIds.length > 0) {
-      // Message count limit checking (1 minute window)
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
       const { count: minuteMsgCount, error: countError } = await supabaseAdmin
         .from('chat_messages')
@@ -100,7 +106,6 @@ serve(async (req) => {
         );
       }
 
-      // Token count limit checking (24 hour window)
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: dailyMsgs } = await supabaseAdmin
         .from('chat_messages')
@@ -127,148 +132,16 @@ serve(async (req) => {
       }
     }
 
-    // 6. Intelligent Query Router
-    let route = 'RAG';
-    const classificationPrompt = `You are a query router. Classify the user query into one of these categories:
-- "DATABASE": Questions asking about the user's specific financial data, transactions, expenses, budget, savings, spending totals, categories, or recent logs.
-- "RAG": Questions asking about the Spendly app itself, its features, OCR receipt scanner, UPI screenshot detection, offline mode, rate limits, guides, FAQ, or how to use the app.
-- "BOTH": Questions that require querying the database for user data AND reference the Spendly app's knowledge base.
-- "GENERAL": General chit-chat or questions that don't fit any of the above.
-
-Query: "${message}"
-
-Respond with ONLY one word from: DATABASE, RAG, BOTH, GENERAL.`;
-
-    try {
-      const classifierRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: classificationPrompt }] }]
-        })
-      });
-      if (classifierRes.ok) {
-        const data = await classifierRes.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() || '';
-        if (text.includes('DATABASE')) route = 'DATABASE';
-        else if (text.includes('RAG')) route = 'RAG';
-        else if (text.includes('BOTH')) route = 'BOTH';
-        else if (text.includes('GENERAL')) route = 'GENERAL';
-      }
-    } catch (e) {
-      console.warn('[Chat Router] Gemini classifier failed. Using keyword fallback.', e);
-      // Fallback keyword match
-      const text = message.toLowerCase();
-      const dbKeywords = ['spend', 'spent', 'budget', 'transaction', 'category', 'categories', 'report', 'chart', 'analytic', 'save', 'saving', 'expense', 'cost', 'price', 'buy', 'bought', 'pay', 'paid', 'july', 'august', 'month', 'recent'];
-      const ragKeywords = ['spendly', 'faq', 'ocr', 'receipt', 'screenshot', 'upi', 'app', 'usage', 'documentation', 'doc', 'guide', 'manual', 'policy', 'policies', 'help', 'knowledge', 'kb'];
-      
-      const matchesDb = dbKeywords.some(kw => text.includes(kw));
-      const matchesRag = ragKeywords.some(kw => text.includes(kw));
-      
-      if (matchesDb && matchesRag) route = 'BOTH';
-      else if (matchesDb) route = 'DATABASE';
-      else if (matchesRag) route = 'RAG';
-      else route = 'GENERAL';
-    }
-
-    console.log(`[Chat Router] Query: "${message}" -> Route: ${route}`);
-
-    // 7. Context Retrieval based on Route
-    let databaseContext = 'No personal financial data was retrieved for this request.\n';
-    let documentContext = 'No relevant knowledge base documents available.\n';
-    let citations = [];
-
-    // Route: Query user database
-    if (route === 'DATABASE' || route === 'BOTH') {
-      try {
-        console.log(`[Chat] Fetching user transaction data (respecting RLS)...`);
-        const { data: expenses, error: expensesError } = await supabaseClient
-          .from('expenses')
-          .select('amount, merchant, category, currency, transaction_date, notes')
-          .order('transaction_date', { ascending: false });
-
-        if (expensesError) {
-          console.error('[Chat Error] Failed to fetch user data:', expensesError);
-        } else {
-          const budgets = user.user_metadata?.budgets || [];
-          databaseContext = `User's Registered Budgets (stored in user metadata):
-${budgets.length > 0 ? JSON.stringify(budgets, null, 2) : 'No budgets registered.'}
-
-User's Expense/Transaction Logs (Total: ${expenses.length}):
-${expenses.length > 0 
-  ? expenses.map(e => `- Date: ${e.transaction_date}, Merchant: ${e.merchant}, Amount: ${e.amount} ${e.currency}, Category: ${e.category}${e.notes ? ` (Notes: ${e.notes})` : ''}`).join('\n')
-  : 'No transaction logs found.'}
-`;
-        }
-      } catch (dbErr) {
-        console.error('[Chat Error] Database context fetch error:', dbErr);
-      }
-    }
-
-    // Route: Query pgvector RAG
-    if (route === 'RAG' || route === 'BOTH') {
-      try {
-        console.log(`[Chat] Generating embedding for user question...`);
-        const questionEmbedding = await generateEmbedding(message, apiKey);
-
-        console.log(`[Chat] Querying matching document chunks using hybrid search...`);
-        const { data: matchedChunks, error: searchError } = await supabaseAdmin.rpc(
-          'match_document_chunks_hybrid',
-          {
-            query_text: message,
-            query_embedding: questionEmbedding,
-            match_threshold: 0.35, // Cosine similarity confidence threshold
-            match_count: 5,       // Top-K relevant chunks
-            filter_uploaded_by: null,
-            vector_weight: 0.6,
-            full_text_weight: 0.4
-          }
-        );
-
-        if (searchError) {
-          console.error('[Chat Error] Hybrid search failed:', searchError);
-        } else if (matchedChunks && matchedChunks.length > 0) {
-          // Remove duplicate chunks
-          const seen = new Set();
-          const uniqueChunks = [];
-          for (const chunk of matchedChunks) {
-            if (!seen.has(chunk.chunk_text)) {
-              seen.add(chunk.chunk_text);
-              uniqueChunks.push(chunk);
-            }
-          }
-
-          citations = uniqueChunks.map((chunk: any) => ({
-            chunk_id: chunk.chunk_id,
-            title: chunk.document_title || chunk.document_filename,
-            filename: chunk.document_filename,
-            page_number: chunk.page_number,
-            section: chunk.section,
-            similarity: chunk.similarity,
-          }));
-
-          documentContext = uniqueChunks
-            .map((chunk: any, i: number) => {
-              const sourceLabel = `[Source ${i + 1}: ${chunk.document_title || chunk.document_filename} (Page/Row ${chunk.page_number || 'N/A'})]`;
-              return `${sourceLabel}\n${chunk.chunk_text}`;
-            })
-            .join('\n\n');
-        }
-      } catch (ragErr) {
-        console.error('[Chat Error] pgvector RAG retrieval error:', ragErr);
-      }
-    }
-
-    // 8. Retrieve Chat History
+    // 6. Retrieve Chat History
     const { data: historyMessages, error: historyError } = await supabaseAdmin
       .from('chat_messages')
       .select('role, content')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
-      .limit(8); // context window of last 8 messages
+      .limit(8);
 
     if (historyError) {
-      console.error('[Chat Error] Failed to fetch history:', historyError);
+      Logger.error('Failed to fetch chat history', historyError);
     }
 
     const langChainHistory = (historyMessages || []).map((msg) => {
@@ -283,120 +156,156 @@ ${expenses.length > 0
       ? `Previous conversation summary:\n${conversation.summary}\n\n`
       : '';
 
-    // 9. Construct System Prompt
-    const systemPromptText = `You are Spendly AI, an intelligent, professional financial ledger and document assistant.
-You help users analyze documents, receipts, budgets, policies, and spreadsheets, as well as their own financial data (expenses, budgets, savings, transactions).
+    // 7. Instantiate Registered Tools
+    let collectedCitations: any[] = [];
+    const tools = getAgentTools({
+      supabaseClient,
+      supabaseAdmin,
+      userId: user.id,
+      apiKey,
+      onCitationsCollected: (cits) => {
+        collectedCitations = [...collectedCitations, ...cits];
+      },
+      onToolExecuted: (logEntry: ToolLogEntry) => {
+        metrics.toolsCalled.push(logEntry);
+        Logger.logToolExecution(logEntry);
+      }
+    });
 
-Here is the current date and time context:
-Current Date/Time: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+    const toolsByName = Object.fromEntries(tools.map(t => [t.name, t]));
 
-You have access to two types of context sources:
-1. PERSONAL FINANCIAL DATA (if relevant): The authenticated user's actual expenses and budgets.
-2. SPENDLY KNOWLEDGE BASE DOCUMENTS (if relevant): Facts about the Spendly app features, FAQs, OCR scanner, offline syncing, etc.
+    // 8. Construct Agent System Instructions
+    const systemPromptText = `You are Spendly AI, a production-grade AI financial assistant and LangChain Agent.
+Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 
-=== CONTEXT SOURCES ===
---- PERSONAL FINANCIAL DATA ---
-{database_context}
+You are equipped with real, executable tools to perform actions on behalf of the user:
+- update_user_profile(displayName, monthlyIncome, preferredCurrency, language, timezone, preferences): Call this tool WHENEVER the user provides or asks to update their display name, monthly income, preferred currency (USD, INR, EUR, etc.), language, timezone, or bio.
+- get_user_profile(): Call this tool to fetch current profile details.
+- update_transaction(transactionId, merchant, category, amount, currency, paymentMethod, date, notes): Call this tool WHENEVER the user asks to update an expense amount, category, merchant, date, or correct OCR errors.
+- search_transactions(query, category, merchant, startDate, endDate, limit): Call this tool to find user expenses.
+- get_financial_analytics(analysisType, month, year, category): Call this tool WHENEVER the user asks for spending totals, monthly/weekly/yearly spending, category/merchant breakdown, budget utilization, income vs expense, savings rate, or highest/lowest expenses.
+- search_knowledge_base(query, topK): Call this tool WHENEVER the user asks about Spendly app features, OCR scanner, receipt upload, offline mode, guides, or policies.
+- update_budget(category, amount, period): Call this tool WHENEVER the user asks to set, create, or update a budget limit (e.g. increase food budget to ₹6000).
+- get_budgets(): Call this tool to view set category budgets.
 
---- SPENDLY KNOWLEDGE BASE DOCUMENTS ---
-{document_context}
-=======================
+MANDATORY RULES:
+1. YOU MUST CALL THE APPROPRIATE TOOL FOR EVERY REQUEST MATCHING A TOOL CAPABILITY. NEVER claim you cannot perform updates or read user data—you HAVE the tools!
+2. If the user request requires multiple operations (e.g. updating profile/budget AND calculating spending), YOU MUST CALL MULTIPLE TOOLS IN SEQUENCE.
+3. When search_knowledge_base is used, cite documentation sources using brackets like [1], [2].
+4. Always be professional, clear, accurate, and concise.`;
 
-CRITICAL RULES:
-1. When answering questions about user transactions, expenses, budgets, categories, or savings, rely ONLY on the "PERSONAL FINANCIAL DATA" context. Never make up transactions or numbers. Respect the user's privacy and default to their listed currency.
-   - If the user asks about savings, calculate it as Total Income minus Total Expenses. A transaction is considered income if its category contains "salary" or "income" (case-insensitive); other transactions are expenses.
-   - If the user asks about budgets, compare their total category spending against their budgets in user metadata.
-2. When answering questions about Spendly features, FAQs, app usage, OCR, policies, or documentation, rely ONLY on the "SPENDLY KNOWLEDGE BASE DOCUMENTS" context.
-   - When using information from these documents, cite the source in the body of your response using brackets, e.g. [1], [2].
-   - At the end of your response, output a header "Sources:" followed by a numbered list of the sources used (Title, Page/Row).
-   - If the answer cannot be found in the provided sources/context, you MUST reply with exactly: "I'm sorry, I cannot find that information in the Spendly App Knowledge Base or Q&A guide."
-3. Do not cite sources if you are outputting the fallback "I'm sorry, I cannot find that information..." message.
-4. If a question requires both personal financial data and Spendly app guidelines, integrate both cleanly in a single, comprehensive response.
-5. If the question is a general greeting or completely unrelated, respond politely as a helpful financial assistant, but state that you are designed to assist with Spendly app features and personal expense tracking.
-
-Answer the user's question accurately and objectively.`;
-
-    const prompt = ChatPromptTemplate.fromMessages([
-      ['system', systemPromptText],
-      new MessagesPlaceholder('chat_history'),
-      ['human', '{input}'],
-    ]);
-
-    // 10. Initialize Gemini LLM Streaming via LangChain
-    console.log(`[Chat] Calling Gemini streaming API via LangChain...`);
-    const model = new ChatGoogleGenerativeAI({
-      model: 'gemini-2.5-flash',
+    // 9. Initialize Gemini Model with Tool Binding
+    const llm = new ChatGoogleGenerativeAI({
+      model: 'gemini-3.6-flash',
       apiKey: apiKey,
-      streaming: true,
+      temperature: 0.2
     });
 
-    const chain = RunnableSequence.from([
-      prompt,
-      model,
-      new StringOutputParser(),
-    ]);
+    const llmWithTools = llm.bindTools(tools);
 
-    const resultStream = await chain.stream({
-      database_context: databaseContext,
-      document_context: documentContext,
-      summary: conversationSummaryText,
-      chat_history: langChainHistory,
-      input: message,
-    });
+    // 10. Agent Execution Loop
+    const conversationMessages: any[] = [
+      new SystemMessage(systemPromptText),
+      ...langChainHistory,
+      new HumanMessage(message)
+    ];
 
-    // Create ReadableStream to send Server-Sent Events (SSE)
+    let finalStreamResult: any = null;
+    let toolExecutionCount = 0;
+    const MAX_TOOL_LOOPS = 5;
+
+    Logger.info(`[ChatAgent] Starting Agent Execution Loop for query: "${message}"`);
+
+    while (toolExecutionCount < MAX_TOOL_LOOPS) {
+      const responseMessage = await llmWithTools.invoke(conversationMessages);
+      conversationMessages.push(responseMessage);
+
+      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        toolExecutionCount += 1;
+        Logger.info(`[ChatAgent Loop ${toolExecutionCount}] Model requested ${responseMessage.tool_calls.length} tool call(s)`);
+
+        for (const toolCall of responseMessage.tool_calls) {
+          const targetTool = toolsByName[toolCall.name];
+          if (!targetTool) {
+            Logger.warn(`[ChatAgent Warning] Tool "${toolCall.name}" not found.`);
+            conversationMessages.push(new ToolMessage({
+              content: JSON.stringify({ error: `Tool ${toolCall.name} is not available.` }),
+              tool_call_id: toolCall.id
+            }));
+            continue;
+          }
+
+          Logger.info(`[ChatAgent Executing Tool] Name: ${toolCall.name} | Args:`, toolCall.args);
+          try {
+            const toolResult = await targetTool.invoke(toolCall.args);
+            conversationMessages.push(new ToolMessage({
+              content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+              tool_call_id: toolCall.id
+            }));
+          } catch (toolErr: any) {
+            Logger.error(`[ChatAgent Tool Error] ${toolCall.name}:`, toolErr);
+            conversationMessages.push(new ToolMessage({
+              content: JSON.stringify({ error: toolErr.message || 'Tool execution failed' }),
+              tool_call_id: toolCall.id
+            }));
+          }
+        }
+      } else {
+        finalStreamResult = responseMessage;
+        break;
+      }
+    }
+
+    // 11. Stream Response to Client via Server-Sent Events (SSE)
     const textEncoder = new TextEncoder();
-    let fullResponseText = '';
+    const fullResponseText = typeof finalStreamResult?.content === 'string' 
+      ? finalStreamResult.content 
+      : (Array.isArray(finalStreamResult?.content) ? finalStreamResult.content.map((c: any) => c.text || '').join('') : String(finalStreamResult?.content || ''));
 
     const responseStream = new ReadableStream({
       async start(controller) {
-        // First Event: Send Citations Metadata
+        // Send Citations Event First
         controller.enqueue(
-          textEncoder.encode(`event: citations\ndata: ${JSON.stringify(citations)}\n\n`)
+          textEncoder.encode(`event: citations\ndata: ${JSON.stringify(collectedCitations)}\n\n`)
         );
 
         try {
-          for await (const token of resultStream) {
-            if (token) {
-              fullResponseText += token;
-              // Stream Token Event
-              controller.enqueue(
-                textEncoder.encode(`event: token\ndata: ${JSON.stringify({ text: token })}\n\n`)
-              );
-            }
+          // Stream tokens in chunked packets for responsive SSE UI playback
+          const chunkSize = 8;
+          for (let i = 0; i < fullResponseText.length; i += chunkSize) {
+            const tokenStr = fullResponseText.slice(i, i + chunkSize);
+            controller.enqueue(
+              textEncoder.encode(`event: token\ndata: ${JSON.stringify({ text: tokenStr })}\n\n`)
+            );
+            await new Promise(r => setTimeout(r, 15));
           }
 
-          // 11. Save User Message & Assistant Response in Database
-          console.log(`[Chat] Saving message logs to database...`);
-          
-          // Estimate prompt and completion tokens (rough estimation: 1 token ~ 4 chars)
-          const systemPromptTextLength = systemPromptText.length + (databaseContext?.length || 0) + (documentContext?.length || 0) + conversationSummaryText.length;
-          const promptTokens = Math.ceil(systemPromptTextLength / 4) + Math.ceil(message.length / 4);
+          // 12. Token Usage & Storage Logging
+          const promptLength = systemPromptText.length + message.length + JSON.stringify(conversationMessages).length;
+          const promptTokens = Math.ceil(promptLength / 4);
           const completionTokens = Math.ceil(fullResponseText.length / 4);
           const totalTokens = promptTokens + completionTokens;
           const tokenUsage = { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens };
 
-          // Insert user message
-          const { data: userMsg, error: userMsgErr } = await supabaseAdmin
-            .from('chat_messages')
-            .insert({
-              conversation_id: conversationId,
-              role: 'user',
-              content: message,
-            })
-            .select('id')
-            .single();
+          metrics.endTimeMs = Date.now();
+          metrics.tokenUsage = { promptTokens, completionTokens, totalTokens };
+          Logger.logSummary(metrics);
 
-          if (userMsgErr) throw userMsgErr;
+          // Save User Message
+          await supabaseAdmin.from('chat_messages').insert({
+            conversation_id: conversationId,
+            role: 'user',
+            content: message,
+          });
 
-          // Insert assistant response
+          // Save Assistant Message
           const { data: assistantMsg, error: asstMsgErr } = await supabaseAdmin
             .from('chat_messages')
             .insert({
               conversation_id: conversationId,
               role: 'assistant',
               content: fullResponseText,
-              citations: citations,
+              citations: collectedCitations,
               token_usage: tokenUsage,
             })
             .select('id')
@@ -410,35 +319,27 @@ Answer the user's question accurately and objectively.`;
             .update({ updated_at: new Date().toISOString() })
             .eq('id', conversationId);
 
-          // Asynchronous Conversation Summarization (trigger if history > 8 messages)
+          // Summarize conversation history if > 8 messages
           if ((historyMessages?.length || 0) >= 8) {
-            const allMessagesForSummary = [...(historyMessages || []), { role: 'user', content: message }, { role: 'assistant', content: fullResponseText }]
-              .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-              .join('\n');
-              
-            // Fire-and-forget summary request
             try {
               const summarizerModel = new ChatGoogleGenerativeAI({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.6-flash',
                 apiKey: apiKey,
               });
-              const summaryPrompt = `Summarize the key discussion points and context of the following financial chat history concisely in 3-4 sentences. Do not mention specific greetings, just save user queries and policy resolutions:\n\n${allMessagesForSummary}`;
+              const summaryPrompt = `Concisely summarize key details and user preferences of this financial chat history in 3 sentences:\n\n${fullResponseText}`;
               const summaryRes = await summarizerModel.invoke(summaryPrompt);
-              const summaryText = summaryRes.content;
-              
-              if (summaryText) {
+              if (summaryRes.content) {
                 await supabaseAdmin
                   .from('chat_conversations')
-                  .update({ summary: summaryText })
+                  .update({ summary: summaryRes.content })
                   .eq('id', conversationId);
-                console.log('[Chat] Summarized conversation history successfully.');
               }
             } catch (err) {
-              console.warn('[Chat] Failed to generate conversation summary background task:', err);
+              Logger.warn('[ChatAgent] Background summarization failed', err);
             }
           }
 
-          // Final SSE Event: Done
+          // Done Event
           controller.enqueue(
             textEncoder.encode(
               `event: done\ndata: ${JSON.stringify({
@@ -448,7 +349,7 @@ Answer the user's question accurately and objectively.`;
             )
           );
         } catch (streamError: any) {
-          console.error('[Chat Stream Error]', streamError);
+          Logger.error('[ChatAgent Stream Error]', streamError);
           controller.enqueue(
             textEncoder.encode(
               `event: error\ndata: ${JSON.stringify({ error: streamError.message })}\n\n`
@@ -468,9 +369,10 @@ Answer the user's question accurately and objectively.`;
         'Connection': 'keep-alive',
       },
     });
+
   } catch (error: any) {
-    console.error(`[Chat API Error]`, error);
-    return new Response(JSON.stringify({ error: error.message || 'Internal chat server error' }), {
+    Logger.error(`[Chat API Fatal Error]`, error);
+    return new Response(JSON.stringify({ error: error.message || 'Internal chat agent server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
