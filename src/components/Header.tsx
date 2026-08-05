@@ -15,7 +15,7 @@ import { NotificationSidebar } from './NotificationSidebar';
 import { useNotificationStore } from '../store/notificationStore';
 
 interface HeaderProps {
-  title?: string;
+  title?: string | React.ReactNode;
   // Left action options
   showBackButton?: boolean;
   onBackPress?: () => void;

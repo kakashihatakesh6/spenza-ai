@@ -17,6 +17,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../hooks/useTheme';
 import { useChatStore } from '../../store/chatStore';
 import { Header } from '../../components/Header';
+import { BotAvatar } from '../../components/BotAvatar';
 import {
   Send,
   CornerDownLeft,
@@ -320,7 +321,20 @@ export default function ChatSessionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
-        title={activeConversation?.title || 'ASSISTANT'}
+        title={
+          <View style={styles.headerTitleRow}>
+            <BotAvatar size={32} variant="glow" showPulse={true} pulseColor="#10B981" style={{ marginRight: 8 }} />
+            <View style={styles.headerTitleCol}>
+              <Text style={[styles.headerTitleMain, { color: colors.text }]} numberOfLines={1}>
+                {activeConversation?.title || 'AI CHATBOT'}
+              </Text>
+              <View style={styles.headerStatusRow}>
+                <View style={[styles.headerStatusDot, { backgroundColor: '#10B981' }]} />
+                <Text style={[styles.headerStatusText, { color: colors.textSecondary }]}>Online • RAG Engine</Text>
+              </View>
+            </View>
+          </View>
+        }
         showBackButton={true}
         onBackPress={() => {
           if (isStreaming) {
@@ -331,7 +345,8 @@ export default function ChatSessionScreen() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
         style={{ flex: 1 }}
       >
         <FlatList
@@ -340,6 +355,7 @@ export default function ChatSessionScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderMessageItem}
           contentContainerStyle={styles.messagesList}
+          keyboardShouldPersistTaps="handled"
           ListFooterComponent={
             isStreaming ? (
               <View style={[styles.messageRow, styles.assistantRow]}>
@@ -580,5 +596,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleCol: {
+    justifyContent: 'center',
+  },
+  headerTitleMain: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    maxWidth: 180,
+  },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  headerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  headerStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
 });

@@ -4,6 +4,7 @@ import {
   Text,
   View,
   TouchableOpacity,
+  ScrollView,
   FlatList,
   TextInput,
   ActivityIndicator,
@@ -18,6 +19,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { Header } from '../../components/Header';
+import { BotAvatar } from '../../components/BotAvatar';
 import {
   Send,
   XCircle,
@@ -90,55 +92,67 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
   }, []);
 
   const suggestions = [
-    { text: "What is Spendly?", desc: "Learn about the app architecture and offline-first design.", icon: Sparkles, color: '#8B5CF6' },
-    { text: "How does receipt scanning work?", desc: "Understand how receipt parsing and extraction syncs.", icon: Scan, color: '#3B82F6' },
-    { text: "What spending categories are supported?", desc: "See categorized limits and budget settings.", icon: TrendingUp, color: '#10B981' },
-    { text: "What are the chat rate limits?", desc: "Check maximum messages and token usage counts.", icon: Info, color: '#EF4444' },
+    { text: "What is Spendly?", desc: "Learn about app architecture & offline storage.", icon: Sparkles, color: '#8B5CF6' },
+    { text: "How does receipt scanning work?", desc: "Understand receipt OCR & item extraction.", icon: Scan, color: '#3B82F6' },
+    { text: "What categories are supported?", desc: "See category limits & budget settings.", icon: TrendingUp, color: '#10B981' },
+    { text: "What are the chat rate limits?", desc: "Check maximum messages & token budgets.", icon: Info, color: '#EF4444' },
   ];
 
   const { colors, isDark } = useTheme();
 
   return (
-    <Animated.View style={[styles.suggestionsContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={[styles.aiBadge, { backgroundColor: colors.primaryLight }]}>
-        <Sparkles size={14} color={colors.primary} style={{ marginRight: 6 }} />
-        <Text style={[styles.aiBadgeText, { color: colors.primary }]}>POWERED BY GEMINI RAG</Text>
-      </View>
-      <Text style={[styles.suggestionsHeaderTitle, { color: colors.text }]}>How can I help you today?</Text>
-      <Text style={[styles.suggestionsHeaderSub, { color: colors.textSecondary }]}>
-        Ask about the Spendly app features, offline guides, policies, or try a popular query below:
-      </Text>
-      
-      <View style={styles.suggestionsGrid}>
-        {suggestions.map((item, idx) => {
-          const IconComp = item.icon;
-          return (
-            <TouchableOpacity
-              key={idx}
-              style={[
-                styles.suggestionCard,
-                {
-                  backgroundColor: isDark ? '#151D30' : '#FFFFFF',
-                  borderColor: colors.border,
-                }
-              ]}
-              onPress={() => onSelectSuggestion(item.text)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.suggestionIconBg, { backgroundColor: item.color + '15' }]}>
-                <IconComp size={18} color={item.color} />
-              </View>
-              <Text style={[styles.suggestionCardTitle, { color: colors.text }]} numberOfLines={2}>
-                {item.text}
-              </Text>
-              <Text style={[styles.suggestionCardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-                {item.desc}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </Animated.View>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={styles.suggestionsScrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.View style={[styles.suggestionsContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.botHeroWrapper}>
+          <BotAvatar size={68} variant="glow" showPulse={true} pulseColor="#10B981" />
+        </View>
+
+        <View style={[styles.aiBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
+          <Sparkles size={14} color={colors.primary} style={{ marginRight: 6 }} />
+          <Text style={[styles.aiBadgeText, { color: colors.primary }]}>GEMINI 2.5 RAG ENGINE ONLINE</Text>
+        </View>
+
+        <Text style={[styles.suggestionsHeaderTitle, { color: colors.text }]}>How can I help you today?</Text>
+        <Text style={[styles.suggestionsHeaderSub, { color: colors.textSecondary }]}>
+          Ask about Spendly features, offline guides, policies, or select a query below:
+        </Text>
+        
+        <View style={styles.suggestionsGrid}>
+          {suggestions.map((item, idx) => {
+            const IconComp = item.icon;
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.suggestionCard,
+                  {
+                    backgroundColor: isDark ? '#151D30' : '#FFFFFF',
+                    borderColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#E5E7EB',
+                  }
+                ]}
+                onPress={() => onSelectSuggestion(item.text)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.suggestionIconBg, { backgroundColor: item.color + '18' }]}>
+                  <IconComp size={18} color={item.color} />
+                </View>
+                <Text style={[styles.suggestionCardTitle, { color: colors.text }]} numberOfLines={2}>
+                  {item.text}
+                </Text>
+                <Text style={[styles.suggestionCardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {item.desc}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Animated.View>
+    </ScrollView>
   );
 };
 
@@ -477,7 +491,18 @@ export default function ChatDashboardScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
-        title="AI CHATBOT"
+        title={
+          <View style={styles.headerTitleRow}>
+            <BotAvatar size={32} variant="glow" showPulse={true} pulseColor="#10B981" style={{ marginRight: 8 }} />
+            <View style={styles.headerTitleCol}>
+              <Text style={[styles.headerTitleMain, { color: colors.text }]}>AI CHATBOT</Text>
+              <View style={styles.headerStatusRow}>
+                <View style={[styles.headerStatusDot, { backgroundColor: '#10B981' }]} />
+                <Text style={[styles.headerStatusText, { color: colors.textSecondary }]}>Online • RAG Engine</Text>
+              </View>
+            </View>
+          </View>
+        }
         showBackButton={true}
         onBackPress={() => {
           if (isStreaming) {
@@ -494,7 +519,8 @@ export default function ChatDashboardScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
           style={{ flex: 1 }}
         >
           {messages.length === 0 ? (
@@ -506,6 +532,7 @@ export default function ChatDashboardScreen() {
               keyExtractor={(item) => item.id}
               renderItem={renderMessageItem}
               contentContainerStyle={styles.messagesList}
+              keyboardShouldPersistTaps="handled"
               ListFooterComponent={
                 isStreaming ? (
                   <AnimatedMessageItem isUser={false}>
@@ -826,5 +853,41 @@ const styles = StyleSheet.create({
   suggestionCardDesc: {
     fontSize: 10,
     lineHeight: 14,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleCol: {
+    justifyContent: 'center',
+  },
+  headerTitleMain: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  headerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  headerStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  suggestionsScrollContent: {
+    flexGrow: 1,
+    paddingVertical: 16,
+  },
+  botHeroWrapper: {
+    marginBottom: 12,
+    alignItems: 'center',
   },
 });
