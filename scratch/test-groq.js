@@ -1,4 +1,4 @@
-const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;;
+const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
 
 async function testGroqDirect() {
   console.log('Testing Groq API with openai/gpt-oss-120b...');
