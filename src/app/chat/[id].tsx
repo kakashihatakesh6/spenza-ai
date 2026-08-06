@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../hooks/useTheme';
 import { useChatStore } from '../../store/chatStore';
@@ -32,6 +33,7 @@ import {
 
 export default function ChatSessionScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { colors, isDark } = useTheme();
   
@@ -345,8 +347,8 @@ export default function ChatSessionScreen() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 60 : 0}
         style={{ flex: 1 }}
       >
         <FlatList
@@ -378,7 +380,16 @@ export default function ChatSessionScreen() {
         />
 
         {/* Input Bar */}
-        <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
+        <View
+          style={[
+            styles.inputBar,
+            {
+              borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+              backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+              paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 12) : 12,
+            },
+          ]}
+        >
           {!isOnline && (
             <Text style={[styles.offlineNotice, { color: colors.danger }]}>
               Cannot send messages while offline. Check connection.

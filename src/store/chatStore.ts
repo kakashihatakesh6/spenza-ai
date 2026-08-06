@@ -81,10 +81,16 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
-    selectConversation: async (id: string) => {
+    selectConversation: async (id: string, forceReload = false) => {
       try {
         const found = get().conversations.find((c) => c.id === id);
         if (!found) return;
+
+        const isAlreadyActive = get().activeConversation?.id === id;
+        if (isAlreadyActive && get().messages.length > 0 && !forceReload) {
+          set({ activeConversation: found });
+          return;
+        }
 
         set({ activeConversation: found, isLoadingMsgs: true, messages: [], streamingMessageText: '', streamingCitations: [] });
         const msgs = await chatService.getMessages(id);

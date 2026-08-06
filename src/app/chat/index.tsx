@@ -14,6 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../store/authStore';
@@ -182,6 +183,7 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
 
 export default function ChatDashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const user = useAuthStore((state) => state.user);
 
@@ -212,14 +214,13 @@ export default function ChatDashboardScreen() {
   
   const flatListRef = useRef<FlatList>(null);
 
-  // Initialize and load chat session silently on mount
+  // Initialize and load chat session silently on mount (using user?.id to prevent object ref re-renders)
   useEffect(() => {
     initializeChatStore();
     
     const initChatSession = async () => {
-      if (!user) return;
+      if (!user?.id) return;
       try {
-        setInitializing(true);
         await loadConversations();
       } catch (err) {
         console.warn('Failed to load conversations:', err);
@@ -228,14 +229,20 @@ export default function ChatDashboardScreen() {
 
     initChatSession();
     return () => cleanupChatStore();
-  }, [user]);
+  }, [user?.id]);
 
   // Set active conversation silently when list loads
   useEffect(() => {
     const autoSetupConversation = async () => {
-      if (!user || isLoadingConvs || !initializing) return;
+      if (!user?.id || isLoadingConvs || !initializing) return;
 
       try {
+        // If active conversation is already loaded, finish initialization without wiping messages
+        if (activeConversation) {
+          setInitializing(false);
+          return;
+        }
+
         // Find existing main chat session
         const mainConv = conversations.find(
           (c) => c.title === 'Spendly AI Assistant' || c.title.includes('AI Assistant')
@@ -256,10 +263,10 @@ export default function ChatDashboardScreen() {
       }
     };
 
-    if (conversations.length >= 0 && !isLoadingConvs && user) {
+    if (conversations.length >= 0 && !isLoadingConvs && user?.id) {
       autoSetupConversation();
     }
-  }, [conversations, isLoadingConvs, user]);
+  }, [conversations, isLoadingConvs, user?.id, activeConversation, initializing]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -543,8 +550,8 @@ export default function ChatDashboardScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 60 : 0}
           style={{ flex: 1 }}
         >
           {messages.length === 0 ? (
@@ -581,7 +588,16 @@ export default function ChatDashboardScreen() {
           )}
 
           {/* Input Bar */}
-          <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
+          <View
+            style={[
+              styles.inputBar,
+              {
+                borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+                paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 12) : 12,
+              },
+            ]}
+          >
             {!isOnline && (
               <Text style={[styles.offlineNotice, { color: colors.danger }]}>
                 Cannot send messages while offline. Check connection.
