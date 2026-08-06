@@ -347,8 +347,8 @@ export default function ChatSessionScreen() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 60 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
         style={{ flex: 1 }}
       >
         <FlatList
@@ -386,7 +386,7 @@ export default function ChatSessionScreen() {
             {
               borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
               backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
-              paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 12) : 12,
+              paddingBottom: Math.max(insets.bottom, 12),
             },
           ]}
         >
@@ -410,6 +410,11 @@ export default function ChatSessionScreen() {
               placeholderTextColor={colors.textSecondary}
               value={inputVal}
               onChangeText={setInputVal}
+              onFocus={() => {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, 150);
+              }}
               editable={isOnline && !sending && !isStreaming}
               multiline
             />
