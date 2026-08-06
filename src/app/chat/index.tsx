@@ -139,7 +139,7 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
 
         <View style={[styles.aiBadge, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
           <Sparkles size={14} color={colors.primary} style={{ marginRight: 6 }} />
-          <Text style={[styles.aiBadgeText, { color: colors.primary }]}>GROQ GPT-OSS-120B RAG ENGINE ONLINE</Text>
+          <Text style={[styles.aiBadgeText, { color: colors.primary }]}>GEMINI 3.5 FLASH LITE RAG ENGINE ONLINE</Text>
         </View>
 
         <Text style={[styles.suggestionsHeaderTitle, { color: colors.text }]}>How can I help you today?</Text>
