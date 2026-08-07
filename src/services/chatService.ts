@@ -162,12 +162,14 @@ export const chatService = {
       xhr.onreadystatechange = () => {
         // readyState 3 = LOADING, 4 = DONE
         if (xhr.readyState === 3 || xhr.readyState === 4) {
-          if (xhr.status !== 200 && xhr.readyState === 4) {
-            try {
-              const errBody = JSON.parse(xhr.responseText);
-              onError(new Error(errBody.error || `HTTP ${xhr.status} Error`));
-            } catch {
-              onError(new Error(`Server returned HTTP ${xhr.status}: ${xhr.statusText || 'Error'}`));
+          if (xhr.status !== 200) {
+            if (xhr.readyState === 4) {
+              try {
+                const errBody = JSON.parse(xhr.responseText);
+                onError(new Error(errBody.error || `HTTP ${xhr.status} Error`));
+              } catch {
+                onError(new Error(`Server returned HTTP ${xhr.status}: ${xhr.statusText || 'Error'}`));
+              }
             }
             return;
           }

@@ -227,7 +227,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           }
         },
         (error) => {
-          logger.error('Store: error during message streaming', error);
+          logger.error('Store: error during message streaming', error?.message || String(error));
           
           // Remove user message from list if sending failed completely
           set((state) => {
@@ -240,9 +240,6 @@ export const useChatStore = create<ChatState>((set, get) => {
               activeStreamAbort: null,
             };
           });
-
-          // Propagate error to UI
-          throw error;
         }
       );
 

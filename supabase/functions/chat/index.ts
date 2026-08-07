@@ -83,7 +83,7 @@ serve(async (req) => {
     // 4. Run Automatic Ingestion Pipeline
     await ensureIngested(supabaseAdmin, geminiApiKey);
 
-    // 5. Rate Limiting (Per-user limit: Max 10 queries per minute, 50,000 daily tokens)
+    // 5. Rate Limiting (Per-user limit: Max 30 queries per minute, 1,000,000 daily tokens)
     const { data: userConvs } = await supabaseAdmin
       .from('chat_conversations')
       .select('id')
@@ -101,9 +101,9 @@ serve(async (req) => {
         .gte('created_at', oneMinuteAgo);
 
       if (countError) throw countError;
-      if (minuteMsgCount && minuteMsgCount >= 10) {
+      if (minuteMsgCount && minuteMsgCount >= 30) {
         return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded: Max 10 messages per minute. Please wait.' }),
+          JSON.stringify({ error: 'Rate limit exceeded: Max 30 messages per minute. Please wait.' }),
           {
             status: 429,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -126,9 +126,9 @@ serve(async (req) => {
         }
       });
 
-      if (dailyTokensUsed >= 50000) {
+      if (dailyTokensUsed >= 10000000) {
         return new Response(
-          JSON.stringify({ error: 'Daily token budget limit reached. Reset in 24 hours.' }),
+          JSON.stringify({ error: 'Daily token budget limit reached (1,000,000 tokens). Reset in 24 hours.' }),
           {
             status: 429,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

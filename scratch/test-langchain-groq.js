@@ -2,7 +2,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { tool } = require('@langchain/core/tools');
 const { z } = require('zod');
 
-const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+const groqApiKey = process.env.GROQ_API_KEY;
 
 async function testLangChainGroq() {
   console.log('Testing LangChain ChatOpenAI with Groq baseURL and openai/gpt-oss-120b...');
