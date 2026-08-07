@@ -163,8 +163,7 @@ export default function EditProfileScreen() {
         title="EDIT PROFILE"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="check"
-        onRightPress={handleSave}
+        hideRightAction={true}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

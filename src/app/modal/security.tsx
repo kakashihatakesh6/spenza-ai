@@ -149,6 +149,7 @@ export default function SecurityScreen() {
         title="SECURITY CENTER"
         showBackButton={true}
         onBackPress={() => router.back()}
+        hideRightAction={true}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

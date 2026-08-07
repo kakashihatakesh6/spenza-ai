@@ -38,6 +38,8 @@ export default function SettingsScreen() {
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [exportFilename, setExportFilename] = useState('');
   const [showTestCenter, setShowTestCenter] = useState(false);
 
   useEffect(() => {
@@ -83,18 +85,27 @@ export default function SettingsScreen() {
     );
   }, [setCurrency]);
 
-  const handleExportCSV = useCallback(async () => {
+  const triggerCSVExportFlow = useCallback(() => {
     if (expenses.length === 0) {
       useAlertStore.getState().showAlert('No Data', 'You have no transactions to export.', 'warning');
       return;
     }
+    const defaultName = `expenses_export_${new Date().toISOString().split('T')[0]}`;
+    setExportFilename(defaultName);
+    setExportModalVisible(true);
+  }, [expenses]);
+
+  const confirmSaveCSV = useCallback(async () => {
+    setExportModalVisible(false);
     try {
-      const path = await exportService.saveCSVToCustomLocation(expenses);
-      useAlertStore.getState().showAlert('Export Ready', `CSV report generated successfully!\n\nLocation:\n${path}`, 'success');
+      const res = await exportService.saveCSVToCustomLocation(expenses, exportFilename);
+      if (res.success && res.path) {
+        useAlertStore.getState().showAlert('Export Ready', `CSV report generated successfully!\n\nLocation:\n${res.path}`, 'success');
+      }
     } catch (e) {
       useAlertStore.getState().showAlert('Export Failed', 'An error occurred while preparing the CSV file.', 'error');
     }
-  }, [expenses]);
+  }, [expenses, exportFilename]);
 
   const handleExportJSON = useCallback(async () => {
     if (expenses.length === 0) {
@@ -369,6 +380,55 @@ export default function SettingsScreen() {
       </Modal>
     );
   };
+
+  const renderExportFilenameModal = () => (
+    <Modal
+      visible={exportModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setExportModalVisible(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ width: '100%', maxWidth: 340, backgroundColor: colors.card, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 }}>Export CSV File</Text>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 16 }}>Specify a custom filename for your exported CSV expense report:</Text>
+          <TextInput
+            value={exportFilename}
+            onChangeText={setExportFilename}
+            placeholder="expenses_export"
+            placeholderTextColor={colors.textSecondary}
+            style={{
+              height: 48,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+              color: colors.text,
+              paddingHorizontal: 14,
+              fontSize: 14,
+              fontWeight: '600',
+              marginBottom: 20,
+            }}
+            autoCapitalize="none"
+          />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setExportModalVisible(false)}
+              style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={confirmSaveCSV}
+              style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Save & Export</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   const clockColonStyle = [styles.clockColon, { color: colors.textSecondary }];
 
@@ -664,7 +724,7 @@ export default function SettingsScreen() {
             iconColor="#0EA5E9"
             title="Export CSV Report"
             subtitle="Generate table file format for Excel"
-            onPress={handleExportCSV}
+            onPress={triggerCSVExportFlow}
           />
           <View style={dividerStyle} />
           <SettingsRow
@@ -723,6 +783,7 @@ export default function SettingsScreen() {
 
       {renderThemeModal()}
       {renderLogoutModal()}
+      {renderExportFilenameModal()}
     </View>
   );
 }

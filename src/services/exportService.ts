@@ -8,7 +8,7 @@ export const exportService = {
   /**
    * Exports the list of expenses as a CSV file and returns the local file path.
    */
-  async exportToCSV(expenses: Expense[]): Promise<string> {
+  async exportToCSV(expenses: Expense[], customFileName?: string): Promise<string> {
     const headers = [
       'ID',
       'Amount',
@@ -42,8 +42,14 @@ export const exportService = {
       ...rows.map((row) => row.join(',')),
     ].join('\n');
 
-    const fileName = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
-    const filePath = `${documentDirectory}${fileName}`;
+    let cleanName = (customFileName || '').trim();
+    if (!cleanName) {
+      cleanName = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (!cleanName.endsWith('.csv')) {
+      cleanName += '.csv';
+    }
+
+    const filePath = `${documentDirectory}${cleanName}`;
 
     await writeAsStringAsync(filePath, csvContent, {
       encoding: EncodingType.UTF8,
@@ -55,23 +61,32 @@ export const exportService = {
   /**
    * Saves CSV file to any user-chosen path on device via Storage Access Framework or native Share Sheet.
    */
-  async saveCSVToCustomLocation(expenses: Expense[]): Promise<string> {
-    const filePath = await this.exportToCSV(expenses);
+  async saveCSVToCustomLocation(expenses: Expense[], customFileName?: string): Promise<{ success: boolean; path?: string }> {
+    let cleanName = (customFileName || '').trim();
+    if (!cleanName) {
+      cleanName = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (!cleanName.endsWith('.csv')) {
+      cleanName += '.csv';
+    }
+
+    const filePath = await this.exportToCSV(expenses, cleanName);
 
     // Try Android StorageAccessFramework for folder picking
     if (Platform.OS === 'android' && StorageAccessFramework) {
       try {
         const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (permissions.granted) {
-          const fileName = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
           const csvContent = await readAsStringAsync(filePath, { encoding: EncodingType.UTF8 });
           const createdUri = await StorageAccessFramework.createFileAsync(
             permissions.directoryUri,
-            fileName,
+            cleanName,
             'text/csv'
           );
           await writeAsStringAsync(createdUri, csvContent, { encoding: EncodingType.UTF8 });
-          return createdUri;
+          return { success: true, path: createdUri };
+        } else {
+          // User cancelled folder picker
+          return { success: false };
         }
       } catch (err) {
         logger.warn('StorageAccessFramework custom path selection fallback to share sheet', err);
@@ -85,9 +100,10 @@ export const exportService = {
         dialogTitle: 'Save CSV Expense Report',
         UTI: 'public.comma-separated-values-text',
       });
+      return { success: true, path: filePath };
     }
 
-    return filePath;
+    return { success: false };
   },
 
   /**

@@ -319,6 +319,7 @@ export default function OCRScanModal() {
           title="SCAN RECEIPT"
           showBackButton={true}
           onBackPress={() => router.back()}
+          hideRightAction={true}
         />
         <View style={[styles.fullScreenContainer, { backgroundColor: '#090D16' }]}>
           {/* Viewfinder Area (Top 68% approximately) */}

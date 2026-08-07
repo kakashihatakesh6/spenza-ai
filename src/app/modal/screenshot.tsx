@@ -149,6 +149,7 @@ export default function ScreenshotModal() {
         title="IMPORT UPI"
         showBackButton={true}
         onBackPress={() => router.back()}
+        hideRightAction={true}
       />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
