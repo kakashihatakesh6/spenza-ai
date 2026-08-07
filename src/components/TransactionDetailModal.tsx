@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -25,6 +25,7 @@ import {
   Edit2,
   Image as ImageIcon,
 } from 'lucide-react-native';
+import { logger } from '../services/logger';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -60,6 +61,12 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { settings } = useSettingsStore();
+
+  useEffect(() => {
+    if (transaction) {
+      logger.info('Expense details opened', { transactionId: transaction.id });
+    }
+  }, [transaction]);
 
   if (!transaction) return null;
 

@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "expense",
-    "slug": "expense",
+    "name": "Spendly",
+    "slug": "spendly-ai",
     "newArchEnabled": true,
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "expense",
+    "scheme": "spendly",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.nkdasarnew.spendly"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +20,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nkexpo.expense"
+      "package": "com.nkdasarnew.spendly"
     },
     "web": {
       "output": "static",
@@ -30,9 +31,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0F19"
         }
       ],
       "expo-sqlite"
@@ -44,8 +46,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a2dcf839-8c04-43f2-be3a-9f2f1f7a8b84"
+        "projectId": "6dd49656-4b3c-41d9-8658-c4e12be818a5"
       }
-    }
+    },
+    "owner": "nkdasarnew"
   }
 }

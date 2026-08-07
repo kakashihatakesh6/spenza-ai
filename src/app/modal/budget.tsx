@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,9 +9,11 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { Header } from '../../components/Header';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useAlertStore } from '../../store/alertStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Card } from '../../components/Card';
 import { Plus, Trash, Check, Settings } from 'lucide-react-native';
@@ -19,45 +21,63 @@ import { expenseHelpers } from '../../utils/expenseHelpers';
 
 export default function BudgetModal() {
   const router = useRouter();
-  const { colors } = useTheme();
-  const { budgets, categories, saveBudget, deleteBudget } = useExpenseStore();
+  const navigation = useNavigation();
+  const { colors, isDark } = useTheme();
+
+  const { budgets, categories, saveBudget, deleteBudget, fetchBudgets } = useExpenseStore();
   const { settings } = useSettingsStore();
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+    fetchBudgets();
+  }, [navigation]);
 
   // Form states
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [limitAmount, setLimitAmount] = useState('');
   const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
     const parsedAmount = parseFloat(limitAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a positive budget limit.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a positive budget limit.', 'warning');
       return;
     }
 
     const budgetId = `${selectedCategory.toLowerCase()}_${period}`;
-    saveBudget({
-      id: budgetId,
-      category: selectedCategory,
-      amount: parsedAmount,
-      period,
-    });
+    try {
+      await saveBudget({
+        id: budgetId,
+        category: selectedCategory,
+        amount: parsedAmount,
+        period,
+      });
 
-    setLimitAmount('');
-    Alert.alert('Success', `Spending limit set for ${selectedCategory}!`);
+      setLimitAmount('');
+      useAlertStore.getState().showAlert('Success', `Spending limit set for ${selectedCategory}!`, 'success');
+    } catch (err) {
+      useAlertStore.getState().showAlert('Error', 'Failed to save budget.', 'error');
+    }
   };
 
   const handleDeleteBudget = (id: string, name: string) => {
-    Alert.alert(
+    useAlertStore.getState().showAlert(
       'Delete Budget',
       `Are you sure you want to delete the spending limit for ${name}?`,
+      'warning',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            deleteBudget(id);
+          onPress: async () => {
+            try {
+              await deleteBudget(id);
+            } catch (err) {
+              useAlertStore.getState().showAlert('Error', 'Failed to delete budget.', 'error');
+            }
           },
         },
       ]
@@ -65,7 +85,15 @@ export default function BudgetModal() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header
+        title="SET BUDGET"
+        showBackButton={true}
+        onBackPress={() => router.back()}
+        rightIcon="check"
+        onRightPress={handleSaveBudget}
+      />
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
         
         {/* Set budget limits form */}
@@ -80,7 +108,7 @@ export default function BudgetModal() {
                   style={[
                     styles.categoryPill,
                     {
-                      backgroundColor: isSelected ? colors.primary : 'rgba(0,0,0,0.02)',
+                      backgroundColor: isSelected ? colors.primary : (isDark ? '#1E293B' : '#F5F5F7'),
                       borderColor: isSelected ? colors.primary : colors.border,
                     },
                   ]}
@@ -128,7 +156,8 @@ export default function BudgetModal() {
                   style={[
                     styles.periodBtn,
                     {
-                      backgroundColor: isSelected ? colors.primary : 'rgba(0,0,0,0.02)',
+                      backgroundColor: isSelected ? colors.primary : (isDark ? '#1E293B' : '#F5F5F7'),
+                      borderColor: isSelected ? colors.primary : colors.border,
                     },
                   ]}
                   onPress={() => setPeriod(p)}
@@ -173,7 +202,9 @@ export default function BudgetModal() {
                 <View style={styles.budgetInfoRow}>
                   <View>
                     <Text style={[styles.budgetName, { color: colors.text }]}>
-                      {b.category === 'All' ? 'Overall Monthly Budget' : `${b.category} Budget`}
+                      {b.category === 'All' 
+                        ? `Overall ${b.period.charAt(0).toUpperCase() + b.period.slice(1)} Budget` 
+                        : `${b.category} Budget`}
                     </Text>
                     <Text style={[styles.budgetSub, { color: colors.textSecondary }]}>
                       Period: {b.period.toUpperCase()}
@@ -185,10 +216,10 @@ export default function BudgetModal() {
                       {b.amount.toFixed(0)}
                     </Text>
                     <TouchableOpacity
-                      style={[styles.deleteBtn, { backgroundColor: colors.primaryLight }]}
+                      style={[styles.deleteBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' }]}
                       onPress={() => handleDeleteBudget(b.id, b.category)}
                     >
-                      <Trash size={14} color={colors.danger} />
+                      <Trash size={14} color="#EF4444" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -199,6 +230,7 @@ export default function BudgetModal() {
       </View>
       <View style={{ height: 40 }} />
     </ScrollView>
+    </View>
   );
 }
 

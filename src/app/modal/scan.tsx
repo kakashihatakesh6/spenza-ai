@@ -9,23 +9,37 @@ import {
   TextInput,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
 } from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Device from 'expo-device';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { Header } from '../../components/Header';
 import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
+import { logger } from '../../services/logger';
 import { Camera as CameraIcon, Check, RefreshCw, Sparkles, X, Image as ImageIcon, ZapOff, Zap, RotateCw } from 'lucide-react-native';
 
 export default function OCRScanModal() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
   
   const { addExpense } = useExpenseStore();
   const { settings } = useSettingsStore();
@@ -34,8 +48,44 @@ export default function OCRScanModal() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [presetName, setPresetName] = useState<string | undefined>(undefined);
   const [isScanning, setIsScanning] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
+
+  // Animation values
+  const shutterScale = useRef(new Animated.Value(1)).current;
+  const blinkOpacity = useRef(new Animated.Value(0)).current;
+
+  const triggerShutterPressAnimation = () => {
+    Animated.sequence([
+      Animated.timing(shutterScale, {
+        toValue: 0.82,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shutterScale, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const triggerShutterBlink = () => {
+    blinkOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(blinkOpacity, {
+        toValue: 0.85,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(blinkOpacity, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   // Editable preview values
   const [merchant, setMerchant] = useState('');
@@ -78,56 +128,81 @@ export default function OCRScanModal() {
         const { status } = await Camera.requestCameraPermissionsAsync();
         setHasPermission(status === 'granted');
       } catch (err) {
-        console.warn('Failed to get camera permission, assuming denied:', err);
+        logger.warn('Failed to get camera permission, assuming denied', err);
         setHasPermission(false);
       }
     })();
   }, []);
 
   const capturePhoto = async (demoPreset?: string) => {
+    // 1. Immediately trigger haptic click feedback for native tactile feel
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // Non-fatal if device doesn't support haptics
+    }
+
+    // 2. Fire button press shrink-grow animation and screen shutter blink overlay
+    triggerShutterPressAnimation();
+    triggerShutterBlink();
+
+    // 3. Mark state as capturing immediately to block further clicks
+    setIsCapturing(true);
+
     if (demoPreset) {
+      // Simulate brief delay for mock selection
+      await new Promise((resolve) => setTimeout(resolve, 300));
       setPhotoUri(`mock_${demoPreset}.jpg`);
       setPresetName(demoPreset);
+      setIsCapturing(false);
       return;
     }
 
     if (!Device.isDevice) {
-      // Simulation Mode: pick random preset
+      // Simulation Mode: pick random preset after a quick delay
+      await new Promise((resolve) => setTimeout(resolve, 400));
       const presets = ['starbucks', 'walmart', 'shell', 'amazon', 'vmart'];
       const randomPreset = presets[Math.floor(Math.random() * presets.length)];
       setPhotoUri(`mock_${randomPreset}.jpg`);
       setPresetName(randomPreset);
+      setIsCapturing(false);
       return;
     }
 
     if (cameraRef.current) {
       try {
-        // Give camera hardware a small delay to stabilize/focus
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Give camera hardware a slightly smaller stabilized focus delay
+        // Having animations and spinner active makes this delay feel smooth rather than frozen.
+        await new Promise((resolve) => setTimeout(resolve, 250));
         const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
         setPhotoUri(photo.uri);
         setPresetName(undefined);
       } catch (captureError: any) {
-        console.warn('Camera capture failed, prompting gallery/demo fallback:', captureError);
-        Alert.alert(
+        logger.warn('Camera capture failed, prompting gallery/demo fallback', captureError);
+        useAlertStore.getState().showAlert(
           'Camera Capture Failed',
           'Your device camera was unable to capture the image. You can use a demo receipt or pick one from your gallery to test the scanner.',
+          'error',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Use Demo Receipt', onPress: () => capturePhoto('starbucks') },
             { text: 'Open Gallery', onPress: () => pickFromGallery() }
           ]
         );
+      } finally {
+        setIsCapturing(false);
       }
     } else {
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Camera Not Ready',
         'The camera component is not initialized yet. Please try again in a moment, or use a demo receipt.',
+        'warning',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Use Demo Receipt', onPress: () => capturePhoto('starbucks') }
         ]
       );
+      setIsCapturing(false);
     }
   };
 
@@ -135,7 +210,7 @@ export default function OCRScanModal() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Required', 'Gallery access permission is needed to import receipts.');
+        useAlertStore.getState().showAlert('Permission Required', 'Gallery access permission is needed to import receipts.', 'warning');
         return;
       }
 
@@ -153,8 +228,8 @@ export default function OCRScanModal() {
       setPhotoUri(uri);
       setPresetName(undefined);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Gallery Selection Failed', e.message || 'Failed to select image from gallery.');
+      logger.error('Gallery Selection Failed', e);
+      useAlertStore.getState().showAlert('Gallery Selection Failed', e.message || 'Failed to select image from gallery.', 'error');
     }
   };
 
@@ -166,8 +241,9 @@ export default function OCRScanModal() {
       // 1. Run OCR
       const result = await ocrService.extractReceipt(photoUri, presetName);
       
-      // 2. Run AI Categorization on merchant name
-      const categoryResult = await aiService.classifyExpense(result.merchant);
+      // 2. Run AI Categorization on merchant name and item names
+      const itemsText = result.items.map((it) => it.name).join(' ');
+      const categoryResult = await aiService.classifyExpense(result.merchant, itemsText);
 
       setOcrResult(result);
       setMerchant(result.merchant);
@@ -178,8 +254,8 @@ export default function OCRScanModal() {
       
       setIsScanning(false);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('OCR Failed', e.message || 'Failed to extract text from image. Please try again.');
+      logger.error('OCR Failed', e);
+      useAlertStore.getState().showAlert('OCR Failed', e.message || 'Failed to extract text from image. Please try again.', 'error');
       setIsScanning(false);
       setPhotoUri(null);
       setOcrResult(null);
@@ -189,11 +265,11 @@ export default function OCRScanModal() {
   const handleSaveExtracted = () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a valid positive amount.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a valid positive amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Merchant', 'Merchant name is required.');
+      useAlertStore.getState().showAlert('Invalid Merchant', 'Merchant name is required.', 'warning');
       return;
     }
 
@@ -211,7 +287,7 @@ export default function OCRScanModal() {
       receiptImage: photoUri || undefined,
     });
 
-    Alert.alert('Success', 'Extracted expense logged successfully!');
+    useAlertStore.getState().showAlert('Success', 'Extracted expense logged successfully!', 'success');
     router.back();
   };
 
@@ -238,9 +314,15 @@ export default function OCRScanModal() {
 
   if (!photoUri && !isScanning) {
     return (
-      <View style={[styles.fullScreenContainer, { backgroundColor: '#090D16' }]}>
-        {/* Viewfinder Area (Top 68% approximately) */}
-        <View style={styles.viewfinderContainer}>
+      <View style={{ flex: 1, backgroundColor: '#090D16' }}>
+        <Header
+          title="SCAN RECEIPT"
+          showBackButton={true}
+          onBackPress={() => router.back()}
+        />
+        <View style={[styles.fullScreenContainer, { backgroundColor: '#090D16' }]}>
+          {/* Viewfinder Area (Top 68% approximately) */}
+          <View style={styles.viewfinderContainer}>
           {Device.isDevice ? (
             <CameraView 
               style={StyleSheet.absoluteFillObject} 
@@ -262,12 +344,26 @@ export default function OCRScanModal() {
             </View>
           )}
 
+          {/* Shutter blink overlay for flash feedback */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: '#FFF',
+                opacity: blinkOpacity,
+                zIndex: 15,
+              },
+            ]}
+            pointerEvents="none"
+          />
+
           {/* Viewfinder Header Overlays */}
           <View style={styles.headerControls}>
             <TouchableOpacity 
-              style={styles.headerControlBtn} 
+              style={[styles.headerControlBtn, { opacity: isCapturing ? 0.4 : 1 }]} 
               activeOpacity={0.7}
               onPress={toggleFlash}
+              disabled={isCapturing}
             >
               {flash === 'on' ? (
                 <Zap size={20} color="#34D399" />
@@ -279,9 +375,10 @@ export default function OCRScanModal() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.headerControlBtn} 
+              style={[styles.headerControlBtn, { opacity: isCapturing ? 0.4 : 1 }]} 
               activeOpacity={0.7}
               onPress={toggleFacing}
+              disabled={isCapturing}
             >
               <RotateCw size={20} color="#FFF" />
             </TouchableOpacity>
@@ -301,20 +398,35 @@ export default function OCRScanModal() {
 
           {/* Viewfinder Bottom controls (Shutter and Gallery) */}
           <View style={styles.viewfinderBottomRow}>
-            {/* Shutter button centered */}
-            <TouchableOpacity 
-              style={[styles.shutterBtn, { opacity: isCameraReady ? 1 : 0.6 }]} 
-              onPress={() => capturePhoto()}
-              disabled={!isCameraReady}
-              activeOpacity={0.9}
-            >
-              <View style={styles.shutterBtnInner} />
-            </TouchableOpacity>
+            {/* Shutter button centered with Scale animation */}
+            <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+              <TouchableOpacity 
+                style={[
+                  styles.shutterBtn, 
+                  { 
+                    opacity: (isCameraReady && !isCapturing) ? 1 : 0.6,
+                    borderColor: isCapturing ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)',
+                  }
+                ]} 
+                onPress={() => capturePhoto()}
+                disabled={!isCameraReady || isCapturing}
+                activeOpacity={0.9}
+              >
+                {isCapturing ? (
+                  <View style={[styles.shutterBtnInner, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
+                    <ActivityIndicator size="small" color="#0F172A" />
+                  </View>
+                ) : (
+                  <View style={styles.shutterBtnInner} />
+                )}
+              </TouchableOpacity>
+            </Animated.View>
 
             {/* Gallery button on the right */}
             <TouchableOpacity 
-              style={styles.galleryIconBtn} 
+              style={[styles.galleryIconBtn, { opacity: isCapturing ? 0.4 : 1 }]} 
               onPress={pickFromGallery}
+              disabled={isCapturing}
               activeOpacity={0.7}
             >
               <ImageIcon size={20} color="#FFF" />
@@ -364,11 +476,26 @@ export default function OCRScanModal() {
           </View>
         </View>
       </View>
+    </View>
     );
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header
+        title="SCAN RECEIPT"
+        showBackButton={true}
+        onBackPress={() => router.back()}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={[styles.container, { backgroundColor: colors.background }]}
+          keyboardShouldPersistTaps="handled"
+        >
       {!photoUri && !isScanning ? (
         <View style={styles.cameraBox}>
           {Device.isDevice ? (
@@ -597,7 +724,9 @@ export default function OCRScanModal() {
         )
       )}
       <View style={{ height: 40 }} />
-    </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -896,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   headerControls: {
     position: 'absolute',
-    top: 50,
+    top: 16,
     left: 20,
     right: 20,
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
-import { useSettingsStore } from '../store/settingsStore';
+import { logger } from './logger';
 
 export interface OcrResult {
   merchant: string;
@@ -64,20 +64,20 @@ export const ocrService = {
    * Connects to the Gemini Cloud API if configured, otherwise falls back to local simulation.
    */
   async extractReceipt(imageUri: string, typePreset?: string): Promise<OcrResult> {
-    const settings = useSettingsStore.getState().settings;
-    const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                      process.env.GEMINI_API_KEY ||
-                      settings.geminiApiKey;
+    logger.info('Receipt scan started', { imageUri, typePreset });
+    const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
     const apiKey = rawApiKey ? rawApiKey.trim() : '';
 
-    console.log('DEBUG: Using Gemini API Key (masked):', apiKey ? apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 5) : 'undefined');
+    logger.debug('Using Gemini API Key (masked)', { apiKey: apiKey ? apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 5) : 'undefined' });
 
     const isMockUri = imageUri.startsWith('mock_');
-    const useCloud = settings.ocrEngine === 'cloud' || !isMockUri;
+    const useCloud = !isMockUri;
 
     if (useCloud) {
       if (!apiKey) {
-        throw new Error('Gemini API key is not configured. Please set it in Settings to perform actual OCR text extraction.');
+        const keyErr = new Error('Gemini API key is not configured. Please set the GEMINI_API_KEY environment variable to perform actual OCR text extraction.');
+        logger.error('OCR failed', keyErr);
+        throw keyErr;
       }
 
       let targetUri = imageUri;
@@ -96,7 +96,7 @@ export const ocrService = {
               isScreenshotPreset = true;
             }
           } catch (assetError) {
-            console.error('Failed to load asset for preset:', presetKey, assetError);
+            logger.error('Failed to load asset for preset', { presetKey, assetError });
           }
         }
       }
@@ -171,11 +171,12 @@ Follow these strict guidelines:
           }
         };
 
-        const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
         const response = await fetch(apiEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
           },
           body: JSON.stringify(payload),
         });
@@ -198,7 +199,7 @@ Follow these strict guidelines:
           throw new Error('The scanned image does not appear to be a receipt, invoice, or payment screenshot. Please scan a valid receipt.');
         }
 
-        return {
+        const result: OcrResult = {
           merchant: parsedResult.merchant || 'Unknown Merchant',
           amount: typeof parsedResult.amount === 'number' ? parsedResult.amount : 0,
           date: parsedResult.date || new Date().toISOString().split('T')[0],
@@ -212,8 +213,11 @@ Follow these strict guidelines:
           isScreenshot: parsedResult.isScreenshot ?? isScreenshotPreset,
         };
 
+        logger.info('Receipt processed', { merchant: result.merchant, amount: result.amount });
+        return result;
+
       } catch (err: any) {
-        console.error('OCR Parsing Error:', err);
+        logger.error('OCR failed', err);
         throw new Error(err.message || 'Failed to extract text from image.');
       }
     }
@@ -225,9 +229,10 @@ Follow these strict guidelines:
     const timeNow = new Date().toTimeString().slice(0, 5);
     const preset = typePreset || this._detectPreset(imageUri);
 
+    let mockResult: OcrResult;
     switch (preset) {
       case 'vmart':
-        return {
+        mockResult = {
           merchant: 'V Mart',
           amount: 45700.00,
           date: '2023-08-25',
@@ -237,118 +242,126 @@ Follow these strict guidelines:
           paymentMethod: 'Cash',
           confidence: 0.99,
           items: [
-            { name: 'Formal shirts', price: 2200.00, quantity: 6 },
-            { name: 'Formal pants', price: 2500.00, quantity: 6 },
-            { name: 'Belt leather', price: 4000.00, quantity: 1 },
-            { name: 'blezer cotton', price: 4500.00, quantity: 3 },
-          ],
+            { name: 'Sony PlayStation 5', price: 44999.00, quantity: 1 },
+            { name: 'Paper Bag', price: 10.00, quantity: 1 },
+            { name: 'GST Tax', price: 691.00, quantity: 1 }
+          ]
         };
+        break;
 
       case 'starbucks':
-        return {
+        mockResult = {
           merchant: 'Starbucks Coffee',
-          amount: 8.75,
+          amount: 320.00,
           date: today,
           time: timeNow,
-          tax: 0.65,
+          tax: 18.50,
           currency: 'INR',
           paymentMethod: 'Credit Card',
-          confidence: 0.95,
-          items: [
-            { name: 'Caffe Latte Grande', price: 4.75, quantity: 1 },
-            { name: 'Blueberry Scone', price: 3.35, quantity: 1 },
-          ],
-        };
-
-      case 'amazon':
-        return {
-          merchant: 'Amazon.com',
-          amount: 49.99,
-          date: today,
-          time: timeNow,
-          tax: 4.12,
-          currency: 'INR',
-          paymentMethod: 'Google Pay',
-          confidence: 0.92,
-          items: [
-            { name: 'Wireless Charging Pad', price: 19.99, quantity: 1 },
-            { name: 'USB-C Cable (3-pack)', price: 25.88, quantity: 1 },
-          ],
-        };
-
-      case 'walmart':
-        return {
-          merchant: 'Walmart Supercenter',
-          amount: 114.50,
-          date: today,
-          time: '14:32',
-          tax: 9.45,
-          currency: 'INR',
-          paymentMethod: 'Debit Card',
-          confidence: 0.89,
-          items: [
-            { name: 'Paper Towels', price: 12.99, quantity: 1 },
-            { name: 'Organic Bananas', price: 2.50, quantity: 1 },
-            { name: 'Bed Sheets King Size', price: 89.56, quantity: 1 },
-          ],
-        };
-
-      case 'shell':
-        return {
-          merchant: 'Shell Gas Station',
-          amount: 45.00,
-          date: today,
-          time: '08:15',
-          tax: 3.50,
-          currency: 'INR',
-          paymentMethod: 'Cash',
           confidence: 0.98,
           items: [
-            { name: 'Regular Unleaded Fuel', price: 45.00, quantity: 1 },
-          ],
+            { name: 'Java Chip Frappuccino', price: 290.00, quantity: 1 },
+            { name: 'Tax / GST', price: 30.00, quantity: 1 }
+          ]
         };
+        break;
+
+      case 'amazon':
+        mockResult = {
+          merchant: 'Amazon Seller Services',
+          amount: 1299.00,
+          date: '2026-07-25',
+          time: '10:15',
+          tax: 198.12,
+          currency: 'INR',
+          paymentMethod: 'UPI (GPay)',
+          confidence: 0.95,
+          items: [
+            { name: 'Boat Bassheads 225', price: 499.00, quantity: 1 },
+            { name: 'Spigen Tough Armor Case', price: 800.00, quantity: 1 }
+          ]
+        };
+        break;
+
+      case 'walmart':
+        mockResult = {
+          merchant: 'Walmart Supercenter',
+          amount: 85.50,
+          date: '2026-07-26',
+          time: '14:22',
+          tax: 6.20,
+          currency: 'USD',
+          paymentMethod: 'Debit Card',
+          confidence: 0.97,
+          items: [
+            { name: 'Organic Milk 1G', price: 4.89, quantity: 2 },
+            { name: 'Whole Wheat Bread', price: 2.49, quantity: 1 },
+            { name: 'Wireless Mouse', price: 19.99, quantity: 1 },
+            { name: 'HDMI Cable 6ft', price: 12.99, quantity: 2 }
+          ]
+        };
+        break;
+
+      case 'shell':
+        mockResult = {
+          merchant: 'Shell Petrol Pump',
+          amount: 1500.00,
+          date: today,
+          time: timeNow,
+          tax: 114.50,
+          currency: 'INR',
+          paymentMethod: 'Cash',
+          confidence: 0.96,
+          items: [
+            { name: 'Unleaded Petrol 15L', price: 1500.00, quantity: 1 }
+          ]
+        };
+        break;
 
       case 'gpay_upi':
-        return {
-          merchant: 'Google Pay UPI Transfer to John Doe',
-          amount: 750.00,
+        mockResult = {
+          merchant: 'Aman General Store',
+          amount: 150.00,
           date: today,
           time: timeNow,
           tax: 0.00,
           currency: 'INR',
-          paymentMethod: 'UPI (GPay)',
-          confidence: 0.97,
-          transactionId: 'UPI983748291048',
+          paymentMethod: 'UPI (Google Pay)',
+          confidence: 0.95,
+          transactionId: 'UPI204928304918',
           isScreenshot: true,
           items: [
-            { name: 'UPI Fund Transfer', price: 750.00, quantity: 1 },
-          ],
+            { name: 'Grocery Items', price: 150.00, quantity: 1 }
+          ]
         };
+        break;
 
       case 'phonepe_upi':
-        return {
-          merchant: 'PhonePe Payment to Swiggy',
-          amount: 345.50,
+        mockResult = {
+          merchant: 'Swiggy Food Delivery',
+          amount: 649.00,
           date: today,
-          time: '20:15',
-          tax: 18.50,
+          time: timeNow,
+          tax: 48.00,
           currency: 'INR',
           paymentMethod: 'UPI (PhonePe)',
-          confidence: 0.96,
-          transactionId: 'TXN202607158972',
+          confidence: 0.93,
+          transactionId: 'TXN2026072938123',
           isScreenshot: true,
           items: [
-            { name: 'Food Delivery Order', price: 327.00, quantity: 1 },
-            { name: 'Restaurant GST & Packaging', price: 18.50, quantity: 1 },
-          ],
+            { name: 'Paneer Butter Masala', price: 320.00, quantity: 1 },
+            { name: 'Butter Naan', price: 60.00, quantity: 3 },
+            { name: 'Delivery Charge & Taxes', price: 149.00, quantity: 1 }
+          ]
         };
+        break;
 
       case 'paytm_upi':
-        return {
-          merchant: 'Paytm Merchant Payment to Zara',
+        mockResult = {
+          merchant: 'Zara Store DLF Mall',
           amount: 2499.00,
-          date: today,
-          time: '18:45',
+          date: '2026-07-28',
+          time: '20:10',
           tax: 270.00,
           currency: 'INR',
           paymentMethod: 'UPI (Paytm)',
@@ -360,9 +373,10 @@ Follow these strict guidelines:
             { name: 'VAT / Tax', price: 270.00, quantity: 1 },
           ],
         };
+        break;
 
       default:
-        return {
+        mockResult = {
           merchant: 'Local Merchant Store',
           amount: 25.60,
           date: today,
@@ -375,7 +389,11 @@ Follow these strict guidelines:
             { name: 'Miscellaneous Item', price: 23.80, quantity: 1 },
           ],
         };
+        break;
     }
+
+    logger.info('Receipt processed', { merchant: mockResult.merchant, amount: mockResult.amount, isMock: true });
+    return mockResult;
   },
 
   _detectPreset(imageUri: string): string {

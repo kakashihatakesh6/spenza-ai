@@ -2,13 +2,14 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
-import { LayoutDashboard, Receipt, TrendingUp, Settings as SettingsIcon } from 'lucide-react-native';
+import { Home, Receipt, TrendingUp, Settings as SettingsIcon } from 'lucide-react-native';
 
-const TabIcon = ({ focused, icon: Icon, badge }: { focused: boolean; icon: any; badge?: boolean }) => {
+const TabIcon = ({ focused, icon: Icon, badge, fill }: { focused: boolean; icon: any; badge?: boolean; fill?: boolean }) => {
   const { colors } = useTheme();
+  const iconColor = focused ? colors.primary : colors.textSecondary;
   return (
     <View style={focused ? [styles.activeIconWrapper, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }] : styles.inactiveIconWrapper}>
-      <Icon size={20} color={focused ? colors.primary : colors.textSecondary} />
+      <Icon size={20} color={iconColor} fill={fill ? iconColor : 'none'} />
       {badge && <View style={styles.badgeDot} />}
     </View>
   );
@@ -49,9 +50,9 @@ export default function TabsLayout() {
         },
         headerTintColor: colors.text,
         tabBarStyle: {
-          backgroundColor: '#0F172A', // Dark slate bottom tab bar
+          backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
           borderTopWidth: 1,
-          borderTopColor: '#1E293B',
+          borderTopColor: isDark ? '#1E293B' : '#EAEAEA',
           height: 72,
           paddingBottom: 10,
           paddingTop: 10,
@@ -63,6 +64,7 @@ export default function TabsLayout() {
           fontWeight: '700',
           marginTop: 2,
         },
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen
@@ -70,7 +72,7 @@ export default function TabsLayout() {
         options={{
           title: 'Dashboard',
           tabBarLabel: 'Dashboard',
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={LayoutDashboard} />,
+          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={Home} fill={focused} />,
         }}
       />
       <Tabs.Screen

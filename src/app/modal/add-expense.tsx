@@ -14,16 +14,19 @@ import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useTheme } from '../../hooks/useTheme';
+import { useAlertStore } from '../../store/alertStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import * as ImagePicker from 'expo-image-picker';
 import { notificationService } from '../../services/notificationService';
 import { Calendar, Clock, DollarSign, Image as ImageIcon, Check, Trash } from 'lucide-react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Header } from '../../components/Header';
 
 export default function AddExpenseModal() {
   const router = useRouter();
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   
   // Search parameters for Edit Mode
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -43,6 +46,12 @@ export default function AddExpenseModal() {
   const [receiptImage, setReceiptImage] = useState<string | undefined>(undefined);
 
   const isEditMode = !!id;
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
 
   useEffect(() => {
     if (isEditMode && id) {
@@ -67,7 +76,7 @@ export default function AddExpenseModal() {
   const selectReceiptImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Cooperation needed to access gallery.');
+      useAlertStore.getState().showAlert('Permission Required', 'Cooperation needed to access gallery.', 'warning');
       return;
     }
 
@@ -85,11 +94,11 @@ export default function AddExpenseModal() {
   const handleSave = async () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Input', 'Please enter a valid positive expense amount.');
+      useAlertStore.getState().showAlert('Invalid Input', 'Please enter a valid positive expense amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Input', 'Please enter a merchant name.');
+      useAlertStore.getState().showAlert('Invalid Input', 'Please enter a merchant name.', 'warning');
       return;
     }
 
@@ -112,7 +121,7 @@ export default function AddExpenseModal() {
         ...original,
         ...expensePayload,
       });
-      Alert.alert('Success', 'Transaction successfully updated.');
+      useAlertStore.getState().showAlert('Success', 'Transaction successfully updated.', 'success');
     } else {
       const newId = `exp_${Date.now()}`;
       addExpense({
@@ -122,49 +131,73 @@ export default function AddExpenseModal() {
       
       // Perform Budget limit evaluations and push alerts
       _checkBudgetLimits(category, parsedAmount);
-      Alert.alert('Success', 'Transaction successfully logged.');
+      useAlertStore.getState().showAlert('Success', 'Transaction successfully logged.', 'success');
     }
 
     router.back();
   };
-
   const _checkBudgetLimits = (itemCategory: string, itemAmount: number) => {
+    const threshold = settings.budgetWarningThreshold || 80;
+    const thresholdFrac = threshold / 100;
+
     // 1. Overall monthly budget check
     const overallBudget = budgets.find((b) => b.category === 'All' && b.period === 'monthly');
     if (overallBudget) {
       const monthlySpend = expenses
         .filter((e) => e.date.startsWith(expenseHelpers.getLocalDateString().slice(0, 7)))
         .reduce((sum, e) => sum + Number(e.amount), 0) + itemAmount;
-  
+      const oldMonthlySpend = monthlySpend - itemAmount;
+      const warningLimit = overallBudget.amount * thresholdFrac;
+
       if (monthlySpend > overallBudget.amount) {
         notificationService.sendImmediateNotification(
           '🚨 Monthly Budget Exceeded!',
           `Your total spending (${expenseHelpers.getCurrencySymbol(settings.currency)}${monthlySpend.toFixed(2)}) has gone over your monthly budget limit of ${expenseHelpers.getCurrencySymbol(settings.currency)}${overallBudget.amount.toFixed(2)}.`
         );
+      } else if (
+        settings.budgetWarningEnabled &&
+        oldMonthlySpend < warningLimit &&
+        monthlySpend >= warningLimit
+      ) {
+        notificationService.sendImmediateNotification(
+          '⚠️ Approaching Monthly Budget!',
+          `You have spent ${threshold}% (${expenseHelpers.getCurrencySymbol(settings.currency)}${monthlySpend.toFixed(2)}) of your overall monthly budget limit of ${expenseHelpers.getCurrencySymbol(settings.currency)}${overallBudget.amount.toFixed(2)}.`
+        );
       }
     }
-  
+
     // 2. Specific category budget check
     const catBudget = budgets.find((b) => b.category === itemCategory && b.period === 'monthly');
     if (catBudget) {
       const catSpend = expenses
         .filter((e) => e.category === itemCategory && e.date.startsWith(expenseHelpers.getLocalDateString().slice(0, 7)))
         .reduce((sum, e) => sum + Number(e.amount), 0) + itemAmount;
+      const oldCatSpend = catSpend - itemAmount;
+      const catWarningLimit = catBudget.amount * thresholdFrac;
 
       if (catSpend > catBudget.amount) {
         notificationService.sendImmediateNotification(
           `🚨 Category Limit Exceeded: ${itemCategory}`,
           `Your ${itemCategory} spending (${expenseHelpers.getCurrencySymbol(settings.currency)}${catSpend.toFixed(2)}) has gone over your set category monthly limit (${expenseHelpers.getCurrencySymbol(settings.currency)}${catBudget.amount.toFixed(2)}).`
         );
+      } else if (
+        settings.budgetWarningEnabled &&
+        oldCatSpend < catWarningLimit &&
+        catSpend >= catWarningLimit
+      ) {
+        notificationService.sendImmediateNotification(
+          `⚠️ Approaching Category Limit: ${itemCategory}`,
+          `You have spent ${threshold}% (${expenseHelpers.getCurrencySymbol(settings.currency)}${catSpend.toFixed(2)}) of your monthly limit of ${expenseHelpers.getCurrencySymbol(settings.currency)}${catBudget.amount.toFixed(2)} for ${itemCategory}.`
+        );
       }
     }
   };
-
   const handleDeleteExpense = () => {
     if (id) {
-      Alert.alert(
+      useAlertStore.getState().showAlert(
         'Delete Transaction',
         'Are you sure you want to permanently delete this transaction?',
+        'warning',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -185,6 +218,11 @@ export default function AddExpenseModal() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
+      <Header
+        title={isEditMode ? 'EDIT TRANSACTION' : 'ADD TRANSACTION'}
+        showBackButton={true}
+        onBackPress={() => router.back()}
+      />
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         {/* Amount Input Card */}
         <Card style={[styles.amountCard, { backgroundColor: colors.card }]}>
@@ -259,11 +297,19 @@ export default function AddExpenseModal() {
                   styles.categoryBadge,
                   {
                     backgroundColor: isSelected ? cat.color : colors.card,
-                    borderColor: colors.border,
+                    borderColor: isSelected ? cat.color : colors.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
                   },
                 ]}
                 onPress={() => setCategory(cat.name)}
               >
+                <MaterialCommunityIcons 
+                  name={cat.icon as any} 
+                  size={16} 
+                  color={isSelected ? '#FFFFFF' : (isDark ? '#818CF8' : cat.color)} 
+                />
                 <Text
                   style={[
                     styles.categoryText,
@@ -289,7 +335,7 @@ export default function AddExpenseModal() {
                   style={[
                     styles.paymentPill,
                     {
-                      backgroundColor: isSelected ? colors.primary : 'rgba(0,0,0,0.02)',
+                      backgroundColor: isSelected ? colors.primary : (isDark ? '#1E293B' : '#F5F5F7'),
                       borderColor: isSelected ? colors.primary : colors.border,
                     },
                   ]}
@@ -358,7 +404,13 @@ export default function AddExpenseModal() {
         <View style={styles.actionBtnRow}>
           {isEditMode && (
             <TouchableOpacity
-              style={[styles.deleteBtn, { borderColor: colors.danger }]}
+              style={[
+                styles.deleteBtn, 
+                { 
+                  borderColor: colors.danger, 
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' 
+                }
+              ]}
               onPress={handleDeleteExpense}
             >
               <Trash size={20} color={colors.danger} />

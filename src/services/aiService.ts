@@ -8,248 +8,151 @@ export const aiService = {
   /**
    * Automatically classifies an expense into a category based on the merchant name.
    */
-  async classifyExpense(merchant: string): Promise<AiCategorizationResult> {
+  async classifyExpense(merchant: string, rawText?: string): Promise<AiCategorizationResult> {
     // Simulate minor latency
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     const name = merchant.toLowerCase().trim();
+    const context = (rawText || '').toLowerCase().trim();
+    const fullText = `${name} ${context}`;
 
-    // Classification mapping based on common merchant names and keywords
+    // 1. Rent
+    if (this._containsWord(fullText, ['rent', 'landlord', 'housing', 'mortgage', 'lease', 'apartment', 'flat', 'sublet', 'tenancy', 'rent payment'])) {
+      return {
+        category: 'Rent',
+        confidence: 0.98,
+        reason: 'Identified rent, housing or apartment lease keywords.',
+      };
+    }
+
+    // 2. Food / Restaurant
     if (
-      this._containsAny(name, [
-        'starbucks',
-        'mcdonald',
-        'burger king',
-        'subway',
-        'pizza',
-        'restaurant',
-        'cafe',
-        'dunkin',
-        'coffee',
-        'swiggy',
-        'zomato',
-        'bakery',
-        'diner',
+      this._containsWord(fullText, [
+        'starbucks', 'mcdonald', 'burger king', 'subway', 'pizza', 'restaurant', 'restaurent',
+        'cafe', 'dunkin', 'coffee', 'swiggy', 'zomato', 'bakery', 'diner', 'dining', 'eats',
+        'grill', 'kitchen', 'bistro', 'pub', 'bar', 'caterer', 'kfc', 'food', 'biryani', 'curry', 'burger'
       ])
     ) {
       return {
         category: 'Food',
         confidence: 0.98,
-        reason: 'Identified food, beverage, or restaurant merchant.',
+        reason: 'Identified food, restaurant, cafe, or food delivery keywords.',
       };
     }
 
+    // 3. Bills (Utilities, Electric, Water, etc.)
     if (
-      this._containsAny(name, [
-        'walmart',
-        'target',
-        'grocery',
-        'supermarket',
-        'whole foods',
-        'kroger',
-        'safeway',
-        'trader joe',
-        'aldi',
-        'costco',
-        'spit',
-        'vegetable',
-        'mart',
-      ])
-    ) {
-      return {
-        category: 'Grocery',
-        confidence: 0.94,
-        reason: 'Identified major supermarket, department store or grocer.',
-      };
-    }
-
-    if (
-      this._containsAny(name, [
-        'uber',
-        'lyft',
-        'grab',
-        'ola',
-        'taxi',
-        'airline',
-        'flight',
-        'railway',
-        'train',
-        'metro',
-        'delta',
-        'expedia',
-        'booking.com',
-        'airbnb',
-        'hotel',
-      ])
-    ) {
-      return {
-        category: 'Travel',
-        confidence: 0.96,
-        reason: 'Merchant associated with transportation, airlines, or lodging.',
-      };
-    }
-
-    if (
-      this._containsAny(name, [
-        'shell',
-        'exxon',
-        'chevron',
-        'bp',
-        'fuel',
-        'gas station',
-        'petrol',
-        'diesel',
-        'gasoline',
-      ])
-    ) {
-      return {
-        category: 'Fuel',
-        confidence: 0.99,
-        reason: 'Identified service station or petroleum merchant.',
-      };
-    }
-
-    if (
-      this._containsAny(name, [
-        'amazon',
-        'ebay',
-        'aliexpress',
-        'zara',
-        'h&m',
-        'nike',
-        'adidas',
-        'shopping',
-        'boutique',
-        'nordstrom',
-        'apparel',
-        'store',
-        'mall',
-      ])
-    ) {
-      return {
-        category: 'Shopping',
-        confidence: 0.92,
-        reason: 'Merchant associated with online retail or apparel stores.',
-      };
-    }
-
-    if (
-      this._containsAny(name, [
-        'netflix',
-        'spotify',
-        'hulu',
-        'disney',
-        'hbo',
-        'youtube premium',
-        'cinema',
-        'theater',
-        'concert',
-        'ticketmaster',
-        'game',
-        'steam',
-        'playstation',
-        'nintendo',
-        'xbox',
-      ])
-    ) {
-      return {
-        category: 'Entertainment',
-        confidence: 0.97,
-        reason: 'Identified digital subscription, gaming, or amusement provider.',
-      };
-    }
-
-    if (
-      this._containsAny(name, [
-        'electric',
-        'water bill',
-        'gas bill',
-        'power',
-        'utility',
-        'comcast',
-        'at&t',
-        'verizon',
-        't-mobile',
-        'internet',
-        'wifi',
-        'broadband',
-        'mobile recharge',
-        'phone bill',
-        'insurance',
+      this._containsWord(fullText, [
+        'electric', 'electricity', 'water bill', 'gas bill', 'power', 'utility', 'comcast',
+        'at&t', 'verizon', 't-mobile', 'internet', 'wifi', 'broadband', 'mobile recharge',
+        'phone bill', 'insurance', 'recharge', 'bescom', 'tneb', 'mseb', 'kseb', 'pg&e',
+        'coned', 'telecom', 'utility bill', 'sewer', 'trash'
       ])
     ) {
       return {
         category: 'Bills',
         confidence: 0.95,
-        reason: 'Identified periodic utility service or bill provider.',
+        reason: 'Identified electric, water, internet, or telecom utility bill keywords.',
       };
     }
 
+    // 4. Travel
     if (
-      this._containsAny(name, [
-        'hospital',
-        'pharmacy',
-        'cvs',
-        'walgreens',
-        'clinic',
-        'doctor',
-        'dentist',
-        'medical',
-        'health',
-        'gym',
-        'fitness',
-        'insurance health',
+      this._containsWord(fullText, [
+        'uber', 'lyft', 'grab', 'ola', 'taxi', 'cab', 'airline', 'flight', 'railway',
+        'train', 'metro', 'delta', 'expedia', 'booking.com', 'airbnb', 'hotel', 'stay',
+        'travel', 'bus', 'auto', 'rickshaw', 'hostel', 'irctc'
+      ])
+    ) {
+      return {
+        category: 'Travel',
+        confidence: 0.96,
+        reason: 'Identified ride-sharing, flight, hotel, or transit keywords.',
+      };
+    }
+
+    // 5. Grocery
+    if (
+      this._containsWord(fullText, [
+        'walmart', 'target', 'grocery', 'supermarket', 'whole foods', 'kroger', 'safeway',
+        'trader joe', 'aldi', 'costco', 'mart', 'vegetable', 'fruit', 'meat', 'milk', 'dairy',
+        'blinkit', 'zepto', 'instamart', 'bigbasket', 'provisions'
+      ])
+    ) {
+      return {
+        category: 'Grocery',
+        confidence: 0.94,
+        reason: 'Identified supermarket, grocer, or daily provision store.',
+      };
+    }
+
+    // 6. Shopping
+    if (
+      this._containsWord(fullText, [
+        'amazon', 'ebay', 'aliexpress', 'zara', 'h&m', 'nike', 'adidas', 'shopping',
+        'boutique', 'nordstrom', 'apparel', 'store', 'mall', 'fashion', 'clothes', 'shoes',
+        'myntra', 'flipkart', 'meesho'
+      ])
+    ) {
+      return {
+        category: 'Shopping',
+        confidence: 0.92,
+        reason: 'Identified online retail, apparel store, or shopping center.',
+      };
+    }
+
+    // 7. Health
+    if (
+      this._containsWord(fullText, [
+        'hospital', 'pharmacy', 'cvs', 'walgreens', 'clinic', 'doctor', 'dentist',
+        'medical', 'health', 'gym', 'fitness', 'wellness', 'meds', 'apothecary', 'care'
       ])
     ) {
       return {
         category: 'Health',
         confidence: 0.96,
-        reason: 'Identified pharmacy, medical practice, or physical health provider.',
+        reason: 'Identified pharmacy, medical center, or healthcare provider.',
       };
     }
 
-    if (this._containsAny(name, ['rent', 'landlord', 'housing', 'mortgage'])) {
-      return {
-        category: 'Rent',
-        confidence: 0.98,
-        reason: 'Identified rent or lease payment terminology.',
-      };
-    }
-
+    // 8. Fuel
     if (
-      this._containsAny(name, [
-        'emi',
-        'loan',
-        'installment',
-        'finance',
-        'interest payment',
-        'credit card payment',
+      this._containsWord(fullText, [
+        'shell', 'exxon', 'chevron', 'bp', 'fuel', 'gas station', 'petrol', 'diesel',
+        'gasoline', 'oil', 'cng'
+      ])
+    ) {
+      return {
+        category: 'Fuel',
+        confidence: 0.99,
+        reason: 'Identified petrol, diesel, gas station, or oil merchant.',
+      };
+    }
+
+    // 9. EMI
+    if (
+      this._containsWord(fullText, [
+        'emi', 'loan', 'installment', 'finance', 'interest payment', 'credit card payment'
       ])
     ) {
       return {
         category: 'EMI',
         confidence: 0.93,
-        reason: 'Identified debt installment or loan repayment payment.',
+        reason: 'Identified installment or debt repayment terminology.',
       };
     }
 
+    // 10. Education
     if (
-      this._containsAny(name, [
-        'school',
-        'university',
-        'college',
-        'tuition',
-        'udemy',
-        'coursera',
-        'bookstore',
-        'class',
-        'course',
+      this._containsWord(fullText, [
+        'school', 'university', 'college', 'tuition', 'udemy', 'coursera', 'bookstore',
+        'class', 'course', 'academy', 'training'
       ])
     ) {
       return {
         category: 'Education',
         confidence: 0.94,
-        reason: 'Identified educational institution, classes, or course provider.',
+        reason: 'Identified education, book store, or course platform.',
       };
     }
 
@@ -257,11 +160,17 @@ export const aiService = {
     return {
       category: 'Other',
       confidence: 0.5,
-      reason: 'Uncategorized merchant. Assigned to general category.',
+      reason: 'Assigned to general other expenses.',
     };
   },
 
-  _containsAny(text: string, keywords: string[]): boolean {
-    return keywords.some((keyword) => text.includes(keyword));
+  _containsWord(text: string, keywords: string[]): boolean {
+    const cleaned = text.toLowerCase();
+    return keywords.some((keyword) => {
+      // Escape regex special characters
+      const escaped = keyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+      return regex.test(cleaned);
+    });
   },
 };

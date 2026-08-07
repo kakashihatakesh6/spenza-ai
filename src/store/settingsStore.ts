@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Settings } from '../types';
 import { expenseRepository } from '../database/repositories/expenseRepository';
+import { logger } from '../services/logger';
 
 interface SettingsState {
   settings: Settings;
@@ -8,9 +9,9 @@ interface SettingsState {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setCurrency: (currency: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
-  setOcrEngine: (engine: 'mock' | 'cloud') => void;
-  setAiCategorizationEnabled: (enabled: boolean) => void;
-  setGeminiApiKey: (key: string) => void;
+  setNotificationTime: (hour: number, minute: number) => void;
+  setBudgetWarningEnabled: (enabled: boolean) => void;
+  setBudgetWarningThreshold: (threshold: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -18,65 +19,82 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     theme: 'system',
     currency: 'INR',
     notificationsEnabled: true,
-    ocrEngine: 'mock',
-    aiCategorizationEnabled: true,
-    geminiApiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
-                  process.env.GEMINI_API_KEY,
+    notificationHour: 20,
+    notificationMinute: 0,
+    budgetWarningEnabled: true,
+    budgetWarningThreshold: 80,
   },
   fetchSettings: () => {
     try {
       const settings = expenseRepository.getSettings();
       set({ settings });
     } catch (error) {
-      console.error('Error fetching settings from database:', error);
+      logger.error('Error fetching settings from database', error);
     }
   },
   setTheme: (theme) => {
     try {
       expenseRepository.saveSetting('theme', theme);
       set((state) => ({ settings: { ...state.settings, theme } }));
+      logger.info('Theme changed', { theme });
     } catch (error) {
-      console.error('Error saving theme setting:', error);
+      logger.error('Error saving theme setting', error);
     }
   },
   setCurrency: (currency) => {
     try {
       expenseRepository.saveSetting('currency', currency);
       set((state) => ({ settings: { ...state.settings, currency } }));
+      logger.info('Currency changed', { currency });
     } catch (error) {
-      console.error('Error saving currency setting:', error);
+      logger.error('Error saving currency setting', error);
     }
   },
   setNotificationsEnabled: (enabled) => {
     try {
       expenseRepository.saveSetting('notificationsEnabled', String(enabled));
       set((state) => ({ settings: { ...state.settings, notificationsEnabled: enabled } }));
+      logger.info(enabled ? 'Notifications enabled' : 'Notifications disabled');
     } catch (error) {
-      console.error('Error saving notificationsEnabled setting:', error);
+      logger.error('Error saving notificationsEnabled setting', error);
     }
   },
-  setOcrEngine: (engine) => {
+  setNotificationTime: (hour, minute) => {
     try {
-      expenseRepository.saveSetting('ocrEngine', engine);
-      set((state) => ({ settings: { ...state.settings, ocrEngine: engine } }));
+      expenseRepository.saveSetting('notificationHour', String(hour));
+      expenseRepository.saveSetting('notificationMinute', String(minute));
+      set((state) => ({
+        settings: {
+          ...state.settings,
+          notificationHour: hour,
+          notificationMinute: minute,
+        },
+      }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving ocrEngine setting:', error);
+      logger.error('Error saving notificationTime setting', error);
     }
   },
-  setAiCategorizationEnabled: (enabled) => {
+  setBudgetWarningEnabled: (enabled) => {
     try {
-      expenseRepository.saveSetting('aiCategorizationEnabled', String(enabled));
-      set((state) => ({ settings: { ...state.settings, aiCategorizationEnabled: enabled } }));
+      expenseRepository.saveSetting('budgetWarningEnabled', String(enabled));
+      set((state) => ({
+        settings: { ...state.settings, budgetWarningEnabled: enabled },
+      }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving aiCategorizationEnabled setting:', error);
+      logger.error('Error saving budgetWarningEnabled setting', error);
     }
   },
-  setGeminiApiKey: (key) => {
+  setBudgetWarningThreshold: (threshold) => {
     try {
-      expenseRepository.saveSetting('geminiApiKey', key);
-      set((state) => ({ settings: { ...state.settings, geminiApiKey: key } }));
+      expenseRepository.saveSetting('budgetWarningThreshold', String(threshold));
+      set((state) => ({
+        settings: { ...state.settings, budgetWarningThreshold: threshold },
+      }));
+      logger.info('Settings saved');
     } catch (error) {
-      console.error('Error saving geminiApiKey setting:', error);
+      logger.error('Error saving budgetWarningThreshold setting', error);
     }
   },
 }));

@@ -1,5 +1,6 @@
 import { documentDirectory, writeAsStringAsync, readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { Expense } from '../types';
+import { logger } from './logger';
 
 export const exportService = {
   /**
@@ -85,7 +86,7 @@ export const exportService = {
       }
       throw new Error('Invalid backup file structure');
     } catch (error) {
-      console.error('Import failed:', error);
+      logger.error('Import failed', error);
       throw error;
     }
   },

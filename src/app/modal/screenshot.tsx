@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,20 +9,32 @@ import {
   Alert,
   TextInput,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
+import { logger } from '../../services/logger';
+import { useAlertStore } from '../../store/alertStore';
 import { Card } from '../../components/Card';
 import { Image as ImageIcon, Check, RefreshCw, Smartphone, Sparkles } from 'lucide-react-native';
+import { Header } from '../../components/Header';
 
 export default function ScreenshotModal() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const navigation = useNavigation();
+  const { colors, isDark } = useTheme();
   const { addExpense } = useExpenseStore();
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [presetName, setPresetName] = useState<string | undefined>(undefined);
@@ -44,7 +56,7 @@ export default function ScreenshotModal() {
       if (!selectedPreset) {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert('Permission Required', 'Cooperation needed to access gallery.');
+          useAlertStore.getState().showAlert('Permission Required', 'Cooperation needed to access gallery.', 'warning');
           return;
         }
 
@@ -66,8 +78,8 @@ export default function ScreenshotModal() {
       setImageUri(uri);
       setPresetName(selectedPreset);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Selection Failed', e.message || 'Unable to select screenshot.');
+      logger.error('Selection Failed', e);
+      useAlertStore.getState().showAlert('Selection Failed', e.message || 'Unable to select screenshot.', 'error');
     }
   };
 
@@ -80,8 +92,9 @@ export default function ScreenshotModal() {
       const detectedPreset = presetName || 'gpay_upi';
       const ocrResult = await ocrService.extractReceipt(imageUri, detectedPreset);
       
-      // 2. Run AI Categorization on merchant name
-      const categoryResult = await aiService.classifyExpense(ocrResult.merchant);
+      // 2. Run AI Categorization on merchant name and items
+      const itemsText = ocrResult.items.map((it) => it.name).join(' ');
+      const categoryResult = await aiService.classifyExpense(ocrResult.merchant, itemsText);
 
       setResult(ocrResult);
       setMerchant(ocrResult.merchant);
@@ -93,8 +106,8 @@ export default function ScreenshotModal() {
       
       setIsScanning(false);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Scan Failed', e.message || 'Failed to extract details from screenshot. Please try again.');
+      logger.error('Scan Failed', e);
+      useAlertStore.getState().showAlert('Scan Failed', e.message || 'Failed to extract details from screenshot. Please try again.', 'error');
       setIsScanning(false);
       setImageUri(null);
       setResult(null);
@@ -104,11 +117,11 @@ export default function ScreenshotModal() {
   const handleSaveExtracted = () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please set a valid positive amount.');
+      useAlertStore.getState().showAlert('Invalid Amount', 'Please set a valid positive amount.', 'warning');
       return;
     }
     if (!merchant.trim()) {
-      Alert.alert('Invalid Merchant', 'Merchant name is required.');
+      useAlertStore.getState().showAlert('Invalid Merchant', 'Merchant name is required.', 'warning');
       return;
     }
 
@@ -126,46 +139,68 @@ export default function ScreenshotModal() {
       receiptImage: imageUri || undefined,
     });
 
-    Alert.alert('Success', 'Screenshot payment logged successfully!');
+    useAlertStore.getState().showAlert('Success', 'Screenshot payment logged successfully!', 'success');
     router.back();
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {!imageUri && !isScanning ? (
-        <View style={styles.pickerBox}>
-          <Smartphone size={64} color={colors.primary} />
-          <Text style={[styles.title, { color: colors.text, marginTop: 16 }]}>UPI Payment Screen</Text>
-          <Text style={[styles.subText, { color: colors.textSecondary }]}>
-            Import screenshots from Google Pay, PhonePe, Paytm or bank apps to extract transaction values instantly.
-          </Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header
+        title="IMPORT UPI"
+        showBackButton={true}
+        onBackPress={() => router.back()}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={[styles.container, { backgroundColor: colors.background }]}
+          keyboardShouldPersistTaps="handled"
+        >
+        {!imageUri && !isScanning ? (
+          <View style={styles.pickerBox}>
+            <View style={[styles.phoneIconBg, { backgroundColor: colors.primaryLight }]}>
+              <Smartphone size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.title, { color: colors.text }]}>UPI Payment Screen</Text>
+            <Text style={[styles.subText, { color: colors.textSecondary }]}>
+              Import screenshots from Google Pay, PhonePe, Paytm or bank apps to extract transaction values instantly.
+            </Text>
 
-          <TouchableOpacity
-            style={[styles.pickerBtn, { backgroundColor: colors.primary }]}
-            onPress={() => pickScreenshot()}
-            activeOpacity={0.8}
-          >
-            <ImageIcon size={20} color="#FFF" style={{ marginRight: 8 }} />
-            <Text style={styles.pickerBtnText}>Select Screenshot</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pickerBtn, { backgroundColor: colors.primary }]}
+              onPress={() => pickScreenshot()}
+              activeOpacity={0.8}
+            >
+              <ImageIcon size={20} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={styles.pickerBtnText}>Select Screenshot</Text>
+            </TouchableOpacity>
 
-          {/* Preset Demos */}
-          <Text style={[styles.demoLabel, { color: colors.textSecondary }]}>CHOOSE PRESET SCREEN (MOCK)</Text>
-          <View style={styles.demoRow}>
-            {['gpay_upi', 'phonepe_upi', 'paytm_upi'].map((preset) => (
-              <TouchableOpacity
-                key={preset}
-                style={[styles.demoBtn, { borderColor: colors.border }]}
-                onPress={() => pickScreenshot(preset)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.demoText, { color: colors.text }]}>
-                  {preset.split('_')[0].toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {/* Preset Demos */}
+            <Text style={[styles.demoLabel, { color: colors.textSecondary }]}>CHOOSE PRESET SCREEN (MOCK)</Text>
+            <View style={styles.demoRow}>
+              {['gpay_upi', 'phonepe_upi', 'paytm_upi'].map((preset) => (
+                <TouchableOpacity
+                  key={preset}
+                  style={[
+                    styles.demoBtn,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                    }
+                  ]}
+                  onPress={() => pickScreenshot(preset)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.demoText, { color: colors.text }]}>
+                    {preset.split('_')[0].toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
       ) : isScanning ? (
         <View style={styles.scanningOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -324,8 +359,10 @@ export default function ScreenshotModal() {
           </View>
         )
       )}
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -461,10 +498,18 @@ const styles = StyleSheet.create({
   previewInput: {
     borderWidth: 1,
     borderRadius: 8,
-    height: 40,
+    height: 44,
     paddingHorizontal: 12,
     fontSize: 14,
     marginBottom: 12,
+  },
+  phoneIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   rowFields: {
     flexDirection: 'row',

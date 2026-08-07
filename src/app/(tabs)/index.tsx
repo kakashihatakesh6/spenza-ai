@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Modal,
+  Animated,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { useExpenseStore } from '../../store/expenseStore';
@@ -17,9 +18,12 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useCurrencyStore } from '../../store/currencyStore';
+import { useAlertStore } from '../../store/alertStore';
+import { Skeleton } from '../../components/Skeleton';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { Header } from '../../components/Header';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import {
   Plus,
@@ -32,23 +36,46 @@ import {
   Info,
   CheckCircle,
   AlertTriangle,
-  BadgeAlert,
   User,
   LogOut,
   X,
   ChevronRight,
   Mail,
   Lightbulb,
+  Calendar,
+  Target,
+  Trophy,
 } from 'lucide-react-native';
+import { TransactionCard } from '../../components/transactions/TransactionCard';
 import { TransactionDetailModal } from '../../components/TransactionDetailModal';
+import { UserProfileModal } from '../../components/UserProfileModal';
+import { BotAvatar } from '../../components/BotAvatar';
 import { Expense } from '../../types';
 
 export default function Dashboard() {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
+
+  const chatScale = React.useRef(new Animated.Value(1)).current;
+
+  const handleChatPressIn = () => {
+    Animated.spring(chatScale, {
+      toValue: 0.88,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleChatPressOut = () => {
+    Animated.spring(chatScale, {
+      toValue: 1,
+      friction: 4,
+      tension: 45,
+      useNativeDriver: true,
+    }).start();
+  };
   
-  const { expenses, budgets, categories, fetchExpenses, fetchCategories, fetchBudgets, addExpense, saveBudget } =
+  const { expenses, budgets, categories, fetchExpenses, fetchCategories, fetchBudgets, addExpense, saveBudget, isLoading } =
     useExpenseStore();
   const { settings } = useSettingsStore();
 
@@ -66,28 +93,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const avatarUrl = user?.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
     navigation.setOptions({
-      headerTitleAlign: 'left',
-      headerTitle: () => (
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitleText, { color: colors.text }]}>Dashboard</Text>
-          <Text style={[styles.headerSubtitleText, { color: colors.textSecondary }]}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </Text>
-        </View>
-      ),
-      headerRight: () => (
-        <TouchableOpacity
-          style={[styles.headerProfileBtn, styles.headerAvatarContainer, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
-          onPress={() => setProfileModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <User size={16} color={colors.primary} />
-        </TouchableOpacity>
-      ),
+      headerShown: false,
     });
-  }, [navigation, user, colors]);
+  }, [navigation]);
 
   const todaySpend = expenseHelpers.getTodaySpend(expenses);
   const weeklySpend = expenseHelpers.getWeeklySpend(expenses);
@@ -125,83 +134,86 @@ export default function Dashboard() {
     return expenses.filter((e) => e.date.startsWith(currentYear));
   };
 
-  const currentMonthBudget =
-    budgets.find((b) => b.category === 'All' && b.period === 'monthly')?.amount || 0;
+
+
+  const weeklyBudget = budgets.find((b) => b.category === 'All' && b.period === 'weekly');
+  const monthlyBudget = budgets.find((b) => b.category === 'All' && b.period === 'monthly');
+  const yearlyBudget = budgets.find((b) => b.category === 'All' && b.period === 'yearly');
+  const hasAnyBudget = !!(weeklyBudget || monthlyBudget || yearlyBudget);
+
+  const renderBudgetRing = (
+    label: string,
+    spend: number,
+    limit: number,
+    IconComponent: any,
+    iconColor: string
+  ) => {
+    const ratio = limit > 0 ? spend / limit : 0;
+    const percentage = Math.min(1, ratio);
+    const radius = 28;
+    const strokeWidth = 5;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - percentage * circumference;
+    const isExceeded = spend > limit;
+    const progressColor = isExceeded ? colors.danger : colors.success;
+
+    return (
+      <View style={styles.ringColumn}>
+        <View style={styles.ringWrapper}>
+          <Svg width="74" height="74">
+            {/* Background Circle */}
+            <Circle
+              cx="37"
+              cy="37"
+              r={radius}
+              stroke={isDark ? '#1e293b' : '#F3F4F6'}
+              strokeWidth={strokeWidth}
+              fill="transparent"
+            />
+            {/* Progress Circle */}
+            <Circle
+              cx="37"
+              cy="37"
+              r={radius}
+              stroke={progressColor}
+              strokeWidth={strokeWidth}
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              transform="rotate(-90 37 37)"
+            />
+          </Svg>
+          <View style={styles.ringIconCenter}>
+            <IconComponent size={20} color={iconColor} />
+          </View>
+        </View>
+        <Text style={[styles.ringLabel, { color: isDark ? '#F1F5F9' : '#220f2aff' }]} numberOfLines={1}>{label}</Text>
+        <Text style={styles.ringValue} numberOfLines={1}>
+          <Text style={{ color: isExceeded ? colors.danger : colors.text, fontWeight: '700' }}>
+            {expenseHelpers.getCurrencySymbol(settings.currency)}{spend.toFixed(0)}
+          </Text>
+          <Text style={{ color: isDark ? '#64748B' : '#94A3B8', fontWeight: '500' }}>
+            /{limit.toFixed(0)}
+          </Text>
+        </Text>
+      </View>
+    );
+  };
 
   const recentExpenses = expenses.slice(0, 4);
   const insights = expenseHelpers.getSpendingInsights(expenses, budgets, settings.currency);
 
-  const getCategoryColor = (catName: string) => {
-    return categories.find((c) => c.name === catName)?.color || '#9CA3AF';
-  };
 
-  const seedSampleData = () => {
-    Alert.alert(
-      'Seed Sample Data',
-      'This will populate your database with 8 mock transactions and a monthly budget of ₹1200 so you can test all features.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Seed Data',
-          onPress: () => {
-            const today = new Date().toISOString().split('T')[0];
-            const getPastDate = (daysAgo: number) => {
-              const d = new Date();
-              d.setDate(d.getDate() - daysAgo);
-              return d.toISOString().split('T')[0];
-            };
 
-             // Seed budget
-            saveBudget({
-              id: 'all_monthly',
-              category: 'All',
-              amount: 1200,
-              period: 'monthly',
-            });
- 
-             // Seed category budgets
-             saveBudget({
-              id: 'food_monthly',
-              category: 'Food',
-              amount: 300,
-              period: 'monthly',
-            });
-
-            // Seed expenses
-            const mockItems = [
-              { id: 'm1', amount: 8.75, merchant: 'Starbucks Coffee', category: 'Food', date: today, time: '08:45', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Caffe Latte & Scone', receiptImage: 'mock_starbucks.jpg' },
-              { id: 'm2', amount: 24.50, merchant: 'Uber Ride', category: 'Travel', date: getPastDate(1), time: '18:30', paymentMethod: 'Google Pay', currency: settings.currency, notes: 'Office to home', receiptImage: 'mock_gpay_upi_screenshot.png' },
-              { id: 'm3', amount: 85.20, merchant: 'Walmart Grocery', category: 'Grocery', date: getPastDate(1), time: '11:15', paymentMethod: 'Debit Card', currency: settings.currency, notes: 'Weekly groceries', receiptImage: 'mock_walmart.jpg' },
-              { id: 'm4', amount: 45.00, merchant: 'Shell Gas Station', category: 'Fuel', date: getPastDate(2), time: '07:30', paymentMethod: 'Cash', currency: settings.currency, notes: 'Fuel fillup', receiptImage: 'mock_shell.jpg' },
-              { id: 'm5', amount: 15.49, merchant: 'Netflix Subscription', category: 'Entertainment', date: getPastDate(3), time: '00:00', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Monthly standard plan' },
-              { id: 'm6', amount: 19.99, merchant: 'Amazon Charger', category: 'Shopping', date: getPastDate(4), time: '14:20', paymentMethod: 'Google Pay', currency: settings.currency, notes: 'Wireless charging pad', receiptImage: 'mock_amazon.jpg' },
-              { id: 'm7', amount: 79.99, merchant: 'Comcast Broadband', category: 'Bills', date: getPastDate(5), time: '10:00', paymentMethod: 'UPI (GPay)', currency: settings.currency, notes: 'WiFi bill', receiptImage: 'mock_gpay_upi_screenshot.png' },
-              { id: 'm8', amount: 125.00, merchant: 'CVS Pharmacy', category: 'Health', date: getPastDate(6), time: '16:45', paymentMethod: 'Credit Card', currency: settings.currency, notes: 'Vitamins & meds' },
-            ];
-
-            for (const item of mockItems) {
-              addExpense(item);
-            }
-
-            Alert.alert('Success', 'Sample data successfully seeded! Restarting views.');
-            fetchExpenses();
-            fetchBudgets();
-          },
-        },
-      ]
-    );
-  };
 
   // Render Category Pie Chart via custom SVG for robust, light styling
   const renderMiniCategoryChart = () => {
     const filteredExpenses = getFilteredExpensesForActiveTab();
     const data = expenseHelpers.getCategorySpending(filteredExpenses, categories);
-    if (data.length === 0) return null;
-
-    let accumulatedAngle = 0;
-    const radius = 40;
-    const strokeWidth = 14;
-    const circumference = 2 * Math.PI * radius;
+    
+    let chartData = data;
+    let isZeroState = false;
 
     const convert = useCurrencyStore.getState().convert;
     const totalFilteredSpend = filteredExpenses.reduce((sum, e) => {
@@ -209,12 +221,35 @@ export default function Dashboard() {
       return sum + amt;
     }, 0);
 
+    if (totalFilteredSpend === 0) {
+      isZeroState = true;
+      const fallbackCats = categories.length >= 4 ? categories.slice(0, 4) : [
+        { name: 'Food', color: '#FF6B81', icon: 'food' },
+        { name: 'Travel', color: '#4EA8DE', icon: 'car' },
+        { name: 'Shopping', color: '#FFB703', icon: 'cart' },
+        { name: 'Bills', color: '#72EFDD', icon: 'bill' }
+      ];
+      chartData = fallbackCats.map((cat) => ({
+        name: cat.name,
+        amount: 1, // equal weight
+        color: cat.color,
+        percentage: 0, // display 0%
+        icon: cat.icon || 'help'
+      }));
+    }
+
+    let accumulatedAngle = 0;
+    const radius = 40;
+    const strokeWidth = 14;
+    const circumference = 2 * Math.PI * radius;
+    const totalWeight = isZeroState ? 4 : totalFilteredSpend;
+
     return (
       <View style={styles.chartContainer}>
         <Svg height="110" width="110" viewBox="0 0 110 110">
-          <Circle cx="55" cy="55" r={radius} stroke={colors.border} strokeWidth={strokeWidth} fill="transparent" />
-          {data.map((cat, idx) => {
-            const percentage = totalFilteredSpend > 0 ? (cat.amount / totalFilteredSpend) : 0;
+          <Circle cx="55" cy="55" r={radius} stroke={isDark ? '#1e293b' : '#EAEAEA'} strokeWidth={strokeWidth} fill="transparent" />
+          {chartData.map((cat, idx) => {
+            const percentage = totalWeight > 0 ? (cat.amount / totalWeight) : 0;
             const strokeDashoffset = circumference - percentage * circumference;
             const rotation = (accumulatedAngle * 360) / circumference - 90;
             accumulatedAngle += percentage * circumference;
@@ -225,7 +260,7 @@ export default function Dashboard() {
                 cx="55"
                 cy="55"
                 r={radius}
-                stroke={cat.color}
+                stroke={isZeroState ? `${cat.color}66` : cat.color}
                 strokeWidth={strokeWidth}
                 fill="transparent"
                 strokeDasharray={circumference}
@@ -236,7 +271,7 @@ export default function Dashboard() {
           })}
         </Svg>
         <View style={styles.chartLegend}>
-          {data.slice(0, 4).map((cat, idx) => (
+          {chartData.slice(0, 4).map((cat, idx) => (
             <View key={idx} style={styles.legendItem}>
               <View style={[styles.legendIndicator, { backgroundColor: cat.color }]} />
               <Text style={[styles.legendText, { color: colors.text }]} numberOfLines={1}>
@@ -269,9 +304,96 @@ export default function Dashboard() {
     return isDark ? '#172554' : '#EFF6FF'; // Soft blue
   };
 
+  const renderDashboardSkeleton = () => {
+    return (
+      <View style={{ padding: 16 }}>
+        {/* Spending Summary Card Skeleton */}
+        <View style={styles.summaryHeader}>
+          <View style={styles.tabContainer}>
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <View key={idx} style={[styles.tabItem, { opacity: 0.5 }]}>
+                <Skeleton width={50} height={12} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+          <Card style={styles.spendCard}>
+            <Skeleton width="40%" height={14} borderRadius={4} style={{ marginBottom: 12 }} />
+            <Skeleton width="60%" height={32} borderRadius={6} style={{ marginBottom: 20 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Skeleton width={80} height={80} borderRadius={40} />
+              <View style={{ flex: 1, marginLeft: 20, gap: 8 }}>
+                <Skeleton width="80%" height={12} borderRadius={4} />
+                <Skeleton width="70%" height={12} borderRadius={4} />
+                <Skeleton width="60%" height={12} borderRadius={4} />
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* Quick Actions Deck Skeleton */}
+        <View style={styles.actionsDeck}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <View key={idx} style={[styles.actionBtn, { backgroundColor: colors.card, opacity: 0.7 }]}>
+              <Skeleton width={32} height={32} borderRadius={16} style={{ marginBottom: 8 }} />
+              <Skeleton width={60} height={12} borderRadius={4} />
+            </View>
+          ))}
+        </View>
+
+        {/* Budget Goals Skeleton */}
+        <View style={styles.sectionHeader}>
+          <Skeleton width="30%" height={16} borderRadius={4} />
+        </View>
+        <Card style={styles.budgetCard}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 12 }}>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <View key={idx} style={{ alignItems: 'center', gap: 8 }}>
+                <Skeleton width={50} height={50} borderRadius={25} />
+                <Skeleton width={40} height={12} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+        </Card>
+
+        {/* Recent Transactions Skeleton */}
+        <View style={styles.sectionHeader}>
+          <Skeleton width="40%" height={16} borderRadius={4} />
+        </View>
+        <View style={{ gap: 12 }}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <View key={idx} style={[styles.recentSkeletonCard, { backgroundColor: colors.card }]}>
+              <Skeleton width={40} height={40} borderRadius={20} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Skeleton width="60%" height={14} borderRadius={4} />
+                <Skeleton width="40%" height={10} borderRadius={4} />
+              </View>
+              <Skeleton width={60} height={16} borderRadius={4} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 1. Spending Summary Card */}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header
+        title="SPENDLY"
+        onMenuPress={() => setProfileModalVisible(true)}
+        onNotificationPress={() => {
+          useAlertStore.getState().showAlert(
+            'Notifications',
+            'No new spending alerts. All budget parameters are running within optimal limits.',
+            'info'
+          );
+        }}
+      />
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+        {isLoading ? (
+          renderDashboardSkeleton()
+        ) : (
+          <>
+            {/* 1. Spending Summary Card */}
       <View style={styles.summaryHeader}>
         <View style={styles.tabContainer}>
           {(['today', 'week', 'month', 'year'] as const).map((tab) => (
@@ -303,7 +425,7 @@ export default function Dashboard() {
             {expenseHelpers.getCurrencySymbol(settings.currency)}
             {activeSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
-          {getFilteredExpensesForActiveTab().length > 0 && renderMiniCategoryChart()}
+          {renderMiniCategoryChart()}
         </Card>
       </View>
 
@@ -341,47 +463,24 @@ export default function Dashboard() {
       </View>
 
       {/* 3. Budget Status Progress */}
-      {currentMonthBudget > 0 ? (
+      {hasAnyBudget ? (
         <Card style={[styles.budgetCard, { borderColor: colors.border }]}>
           <View style={styles.budgetHeader}>
-            <View>
-              <Text style={[styles.budgetTitle, { color: colors.text }]}>Monthly Budget Goal</Text>
-              <Text style={[styles.budgetSub, { color: colors.textSecondary }]}>
-                {expenseHelpers.getCurrencySymbol(settings.currency)}
-                {monthlySpend.toFixed(0)} of {expenseHelpers.getCurrencySymbol(settings.currency)}
-                {currentMonthBudget.toFixed(0)} used
-              </Text>
-            </View>
+            <Text style={[styles.budgetTitle, { color: colors.text }]}>Budget Goals</Text>
             <TouchableOpacity onPress={() => router.push('/modal/budget')}>
-              <Text style={{ color: colors.primary, fontWeight: '600' }}>Manage</Text>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Manage</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#1f293d' : '#e5e7eb' }]}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  backgroundColor: monthlySpend > currentMonthBudget ? colors.danger : colors.success,
-                  width: `${Math.min(100, (monthlySpend / currentMonthBudget) * 100)}%`,
-                },
-              ]}
-            />
+          <View style={styles.ringsRow}>
+            {weeklyBudget && renderBudgetRing('Weekly', weeklySpend, weeklyBudget.amount, Calendar, '#3B82F6')}
+            {monthlyBudget && renderBudgetRing('Monthly', monthlySpend, monthlyBudget.amount, Target, '#10B981')}
+            {yearlyBudget && renderBudgetRing('Yearly', yearlySpend, yearlyBudget.amount, Trophy, '#F59E0B')}
           </View>
-
-          {monthlySpend > currentMonthBudget && (
-            <View style={styles.budgetAlertTextRow}>
-              <BadgeAlert size={14} color={colors.danger} />
-              <Text style={[styles.budgetAlertText, { color: colors.danger }]}>
-                Budget limit exceeded by {expenseHelpers.getCurrencySymbol(settings.currency)}
-                {(monthlySpend - currentMonthBudget).toFixed(2)}!
-              </Text>
-            </View>
-          )}
         </Card>
       ) : (
         <Card style={styles.budgetEmptyCard}>
-          <Text style={[styles.budgetEmptyText, { color: colors.text }]}>No overall budget configured</Text>
+          <Text style={[styles.budgetEmptyText, { color: colors.text }]}>No overall budgets configured</Text>
           <TouchableOpacity
             style={[styles.budgetSetupBtn, { backgroundColor: colors.primaryLight }]}
             onPress={() => router.push('/modal/budget')}
@@ -419,6 +518,7 @@ export default function Dashboard() {
       <View style={styles.sectionHeader}>
         <TrendingUp size={18} color={colors.primary} />
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
+        
         <TouchableOpacity
           style={styles.seeAllBtn}
           onPress={() => router.push('/(tabs)/expenses')}
@@ -429,183 +529,67 @@ export default function Dashboard() {
       </View>
 
       {recentExpenses.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            icon={Compass}
-            title="No Transactions Logged"
-            description="You have not added any transactions yet. Populate the app with sample data to preview the full layout."
-            actionLabel="Seed Sample Data"
-            onAction={seedSampleData}
-          />
+        <View style={[
+          styles.emptyContainer, 
+          { 
+            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.01)', 
+            borderColor: colors.border, 
+            borderWidth: 1, 
+            borderStyle: 'dashed', 
+            borderRadius: 16,
+            height: 100,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+          }
+        ]}>
+          <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+            No transactions yet
+          </Text>
         </View>
       ) : (
         <View style={styles.recentList}>
           {recentExpenses.map((expense) => (
-            <TouchableOpacity key={expense.id} onPress={() => setSelectedTransaction(expense)}>
-              <Card style={styles.transactionItem}>
-                <View style={styles.txRow}>
-                  <View
-                    style={[
-                      styles.txCategoryDot,
-                      { backgroundColor: getCategoryColor(expense.category) },
-                    ]}
-                  />
-                  <View style={styles.txDetails}>
-                    <Text style={[styles.txMerchant, { color: colors.text }]} numberOfLines={1}>
-                      {expense.merchant}
-                    </Text>
-                    <Text style={[styles.txSub, { color: colors.textSecondary }]}>
-                      {expense.category} • {expense.date}
-                    </Text>
-                  </View>
-                  <Text style={[styles.txAmount, { color: colors.text }]}>
-                    {expenseHelpers.getCurrencySymbol(expense.currency || settings.currency)}
-                    {expense.amount.toFixed(2)}
-                  </Text>
-                </View>
-              </Card>
-            </TouchableOpacity>
+            <TransactionCard
+              key={expense.id}
+              transaction={expense}
+              onPress={() => setSelectedTransaction(expense)}
+              currencySymbol={expenseHelpers.getCurrencySymbol(expense.currency || settings.currency)}
+            />
           ))}
         </View>
       )}
       <View style={{ height: 40 }} />
+          </>
+        )}
       <TransactionDetailModal
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
       />
 
       {/* User Profile Modal */}
-      <Modal
+      <UserProfileModal
         visible={profileModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setProfileModalVisible(false)} />
-          <View
-            style={[
-              styles.profileModalContainer,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                shadowColor: isDark ? '#000' : 'rgba(99, 102, 241, 0.15)',
-              },
-            ]}
-          >
-            {/* Header */}
-            <View style={styles.profileModalHeader}>
-              <Text style={[styles.profileModalHeaderTitle, { color: colors.text }]}>User Profile</Text>
-              <TouchableOpacity
-                style={[styles.profileCloseBtn, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}
-                onPress={() => setProfileModalVisible(false)}
-              >
-                <X size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Profile Info */}
-            <View style={styles.profileHero}>
-              <View style={[styles.profileCommonAvatar, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
-                <User size={38} color={colors.primary} />
-              </View>
-              <Text style={[styles.profileName, { color: colors.text }]}>
-                {user?.user_metadata?.username || user?.email?.split('@')[0] || 'Expense User'}
-              </Text>
-              <View style={[styles.profileBadge, { backgroundColor: colors.primaryLight }]}>
-                <Sparkles size={10} color={colors.primary} style={{ marginRight: 4 }} />
-                <Text style={[styles.profileBadgeText, { color: colors.primary }]}>PRO MEMBER</Text>
-              </View>
-            </View>
-
-            {/* Account Details Box */}
-            <View style={[styles.profileStatsBox, { borderColor: colors.border }]}>
-              <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatVal, { color: colors.text }]}>{expenses.length}</Text>
-                <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Expenses</Text>
-              </View>
-              <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatVal, { color: colors.text }]}>
-                  {expenseHelpers.getCurrencySymbol(settings.currency)}{monthlySpend.toFixed(0)}
-                </Text>
-                <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>This Month</Text>
-              </View>
-            </View>
-
-            {/* Menu List */}
-            <View style={styles.profileMenu}>
-              <View style={styles.profileMenuItem}>
-                <View style={[styles.menuItemIconBg, { backgroundColor: colors.primaryLight }]}>
-                  <Mail size={16} color={colors.primary} />
-                </View>
-                <View style={styles.menuItemContent}>
-                  <Text style={[styles.menuItemTitle, { color: colors.textSecondary }]}>Email Address</Text>
-                  <Text style={[styles.menuItemVal, { color: colors.text }]} numberOfLines={1}>{user?.email || 'N/A'}</Text>
-                </View>
-              </View>
-
-              <View style={[styles.profileMenuDivider, { backgroundColor: colors.border }]} />
-
-              <TouchableOpacity
-                style={styles.profileMenuItemInteractive}
-                onPress={() => {
-                  setProfileModalVisible(false);
-                  router.push('/modal/budget');
-                }}
-              >
-                <View style={[styles.menuItemIconBg, { backgroundColor: colors.primaryLight }]}>
-                  <TrendingUp size={16} color={colors.primary} />
-                </View>
-                <Text style={[styles.menuItemInteractiveText, { color: colors.text }]}>Manage Budgets</Text>
-                <ChevronRight size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-
-              <View style={[styles.profileMenuDivider, { backgroundColor: colors.border }]} />
-
-              <TouchableOpacity
-                style={styles.profileMenuItemInteractive}
-                onPress={() => {
-                  setProfileModalVisible(false);
-                  router.push('/(tabs)/settings');
-                }}
-              >
-                <View style={[styles.menuItemIconBg, { backgroundColor: colors.primaryLight }]}>
-                  <User size={16} color={colors.primary} />
-                </View>
-                <Text style={[styles.menuItemInteractiveText, { color: colors.text }]}>Account Preferences</Text>
-                <ChevronRight size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Sign Out Button */}
-            <TouchableOpacity
-              style={[styles.profileLogoutBtn, { backgroundColor: colors.danger }]}
-              onPress={() => {
-                setProfileModalVisible(false);
-                Alert.alert(
-                  'Sign Out',
-                  'Are you sure you want to sign out of your account?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Sign Out', 
-                      style: 'destructive',
-                      onPress: async () => {
-                        await signOut();
-                      }
-                    }
-                  ]
-                );
-              }}
-            >
-              <LogOut size={16} color="#FFF" style={{ marginRight: 8 }} />
-              <Text style={styles.profileLogoutText}>Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setProfileModalVisible(false)}
+      />
     </ScrollView>
+
+    {/* Floating Chatbot Button */}
+    <Pressable
+      onPressIn={handleChatPressIn}
+      onPressOut={handleChatPressOut}
+      onPress={() => router.push('/chat' as any)}
+      style={styles.chatFloatingBtnWrapper}
+    >
+      <Animated.View
+        style={{
+          transform: [{ scale: chatScale }],
+        }}
+      >
+        <BotAvatar size={58} variant="fab" showPulse={true} pulseColor="#10B981" />
+      </Animated.View>
+    </Pressable>
+    </View>
   );
 }
 
@@ -1027,5 +1011,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+  },
+  addInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  ringsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  ringColumn: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  ringWrapper: {
+    width: 74,
+    height: 74,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  ringIconCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  ringValue: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  recentSkeletonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  chatFloatingBtnWrapper: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    zIndex: 999,
+  },
+  chatFloatingBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  pulseBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#34D399',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
 });

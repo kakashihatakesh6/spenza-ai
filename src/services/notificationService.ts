@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 let isHandlerSet = false;
 
@@ -41,10 +42,10 @@ export const notificationService = {
   /**
    * Trigger an immediate notification (e.g., when budget is exceeded).
    */
-  async sendImmediateNotification(title: string, body: string): Promise<string | undefined> {
+  async sendImmediateNotification(title: string, body: string, data?: Record<string, any>): Promise<string | undefined> {
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
-      console.warn('Notifications permission not granted');
+      logger.warn('Notifications permission not granted');
       return undefined;
     }
 
@@ -54,6 +55,7 @@ export const notificationService = {
         title,
         body,
         sound: true,
+        data: data || {},
       },
       trigger: null, // send immediately
     });
@@ -75,6 +77,7 @@ export const notificationService = {
         title: 'Track Your Spending 💰',
         body: 'Did you make any purchases today? Take 10 seconds to scan your receipts or log them manually!',
         sound: true,
+        data: { type: 'info', categoryName: 'REMINDER' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -91,6 +94,39 @@ export const notificationService = {
     if (Platform.OS === 'web') return;
     const Notifications = await getNotifications();
     await Notifications.cancelAllScheduledNotificationsAsync();
+  },
+
+  /**
+   * Send a test budget exceeded notification.
+   */
+  async sendTestBudgetExceeded(category: string, amount: number, limit: number, symbol: string = '₹'): Promise<void> {
+    await this.sendImmediateNotification(
+      '🚨 Monthly Budget Exceeded!',
+      `Your spending in ${category} (${symbol}${amount.toFixed(2)}) has gone over your monthly budget limit of ${symbol}${limit.toFixed(2)}.`,
+      { type: 'security', categoryName: 'BUDGET' } // 'security' gets styled as red, which is nice for exceeded!
+    );
+  },
+
+  /**
+   * Send a test budget warning notification.
+   */
+  async sendTestBudgetWarning(category: string, percentage: number, symbol: string = '₹'): Promise<void> {
+    await this.sendImmediateNotification(
+      '⚠️ Budget Alert Approaching!',
+      `You've used ${percentage}% of your monthly budget limit for ${category}. Control your spending to stay within your limits!`,
+      { type: 'warning', categoryName: 'BUDGET' }
+    );
+  },
+
+  /**
+   * Send a test daily reminder notification.
+   */
+  async sendTestDailyReminder(): Promise<void> {
+    await this.sendImmediateNotification(
+      'Track Your Spending 💰',
+      'Did you make any purchases today? Take 10 seconds to scan your receipts or log them manually!',
+      { type: 'info', categoryName: 'REMINDER' }
+    );
   },
 };
 
