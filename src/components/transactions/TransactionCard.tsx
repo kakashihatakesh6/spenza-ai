@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Expense } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
+import { expenseHelpers } from '../../utils/expenseHelpers';
 
 interface TransactionCardProps {
   transaction: Expense;
@@ -72,6 +73,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = React.memo(({
   // Dynamic icon colors inside circles for high visibility
   const dynamicIconBg = isDark ? '#1E293B' : catStyle.bg;
   const dynamicIconColor = isDark ? '#818CF8' : catStyle.color;
+  const displaySymbol = expenseHelpers.getCurrencySymbol(transaction.currency || currencySymbol);
 
   return (
     <Pressable
@@ -109,7 +111,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = React.memo(({
           ]}
           numberOfLines={1}
         >
-          {isIncome ? '+' : '-'}{currencySymbol}{transaction.amount.toFixed(2)}
+          {isIncome ? '+' : '-'}{displaySymbol}{transaction.amount.toFixed(2)}
         </Text>
       </View>
     </Pressable>

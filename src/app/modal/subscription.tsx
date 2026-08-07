@@ -95,6 +95,7 @@ export default function SubscriptionScreen() {
         title="MEMBERSHIP PLAN"
         showBackButton={true}
         onBackPress={() => router.back()}
+        hideRightAction={true}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

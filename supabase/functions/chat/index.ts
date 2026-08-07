@@ -103,7 +103,7 @@ serve(async (req) => {
       if (countError) throw countError;
       if (minuteMsgCount && minuteMsgCount >= 30) {
         return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded: Max 30 messages per minute. Please wait.' }),
+          JSON.stringify({ error: 'Rate limit exceeded: You have sent 30 messages in the last minute. Please wait a moment before trying again.' }),
           {
             status: 429,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -126,9 +126,9 @@ serve(async (req) => {
         }
       });
 
-      if (dailyTokensUsed >= 10000000) {
+      if (dailyTokensUsed >= 1000000) {
         return new Response(
-          JSON.stringify({ error: 'Daily token budget limit reached (1,000,000 tokens). Reset in 24 hours.' }),
+          JSON.stringify({ error: 'Daily token limit exceeded: You have reached your 1,000,000 daily token allocation. Resets in 24 hours.' }),
           {
             status: 429,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -224,7 +224,39 @@ MANDATORY RULES:
     Logger.info(`[ChatAgent] Starting Agent Execution Loop for query: "${message}"`);
 
     while (toolExecutionCount < MAX_TOOL_LOOPS) {
-      const responseMessage = await llmWithTools.invoke(conversationMessages);
+      let responseMessage: any;
+      try {
+        responseMessage = await llmWithTools.invoke(conversationMessages);
+      } catch (llmError: any) {
+        Logger.error('[ChatAgent LLM Error]', llmError);
+        const errStr = llmError.message || String(llmError);
+        if (errStr.includes('429') || errStr.toLowerCase().includes('rate limit')) {
+          return new Response(
+            JSON.stringify({ error: 'Server busy: Groq AI rate limit reached. Please wait a moment before trying again.' }),
+            {
+              status: 429,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        } else if (errStr.includes('503') || errStr.toLowerCase().includes('overloaded') || errStr.toLowerCase().includes('busy')) {
+          return new Response(
+            JSON.stringify({ error: 'Server busy: Spendly AI cloud is currently experiencing high load. Please try again shortly.' }),
+            {
+              status: 503,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({ error: `AI Engine Error: ${errStr}` }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+      }
+
       conversationMessages.push(responseMessage);
 
       if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {

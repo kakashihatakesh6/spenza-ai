@@ -11,18 +11,69 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Calendar as RNCalendar, DateData } from 'react-native-calendars';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ocrService, OcrResult } from '../../services/ocrService';
 import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
 import { logger } from '../../services/logger';
 import { useAlertStore } from '../../store/alertStore';
+import { useCurrencyStore } from '../../store/currencyStore';
+import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
-import { Image as ImageIcon, Check, RefreshCw, Smartphone, Sparkles } from 'lucide-react-native';
+import { ALL_CURRENCIES, QUICK_CURRENCIES, searchCurrencies } from '../../constants/currencies';
+import { Image as ImageIcon, Check, RefreshCw, Smartphone, Sparkles, Calendar as CalendarIcon, X, ChevronDown, Search, Globe } from 'lucide-react-native';
 import { Header } from '../../components/Header';
+
+const EXPENSE_CATEGORIES = [
+  { name: 'Food', icon: 'food-fork-drink', color: '#FF9500' },
+  { name: 'Grocery', icon: 'cart', color: '#4CD964' },
+  { name: 'Fuel', icon: 'gas-station', color: '#FFCC00' },
+  { name: 'Shopping', icon: 'shopping', color: '#FF2D55' },
+  { name: 'Bills', icon: 'file-document-outline', color: '#5856D6' },
+  { name: 'Travel', icon: 'airplane', color: '#5AC8FA' },
+  { name: 'Entertainment', icon: 'movie-roll', color: '#FF5E3A' },
+  { name: 'Health', icon: 'heart-pulse', color: '#FF3B30' },
+  { name: 'Rent', icon: 'home-variant', color: '#8E8E93' },
+  { name: 'EMI', icon: 'bank', color: '#A4E786' },
+  { name: 'Education', icon: 'school', color: '#007AFF' },
+  { name: 'Other', icon: 'dots-horizontal', color: '#C7C7CC' },
+];
+
+const INCOME_CATEGORIES = [
+  { name: 'Salary', icon: 'cash-multiple', color: '#34C759' },
+  { name: 'Freelance', icon: 'laptop', color: '#6366F1' },
+  { name: 'Investment', icon: 'trending-up', color: '#32D74B' },
+  { name: 'Gift', icon: 'gift', color: '#FF2D55' },
+  { name: 'Refund', icon: 'rotate-left', color: '#FF9500' },
+  { name: 'Other Income', icon: 'cash-plus', color: '#5856D6' },
+];
+
+const getCategoryIconName = (catName: string): string => {
+  const found = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].find(
+    (c) => c.name.toLowerCase() === (catName || '').toLowerCase()
+  );
+  if (found) return found.icon;
+  const lower = (catName || '').toLowerCase();
+  if (lower.includes('food') || lower.includes('dine') || lower.includes('cafe')) return 'food-fork-drink';
+  if (lower.includes('grocer') || lower.includes('mart')) return 'cart';
+  if (lower.includes('fuel') || lower.includes('gas') || lower.includes('petrol')) return 'gas-station';
+  if (lower.includes('shop') || lower.includes('cloth') || lower.includes('store')) return 'shopping';
+  if (lower.includes('bill') || lower.includes('electric') || lower.includes('water')) return 'file-document-outline';
+  if (lower.includes('travel') || lower.includes('flight') || lower.includes('cab')) return 'airplane';
+  if (lower.includes('movie') || lower.includes('entertain')) return 'movie-roll';
+  if (lower.includes('health') || lower.includes('pharm') || lower.includes('med')) return 'heart-pulse';
+  if (lower.includes('rent') || lower.includes('house')) return 'home-variant';
+  if (lower.includes('bank') || lower.includes('emi') || lower.includes('loan')) return 'bank';
+  if (lower.includes('school') || lower.includes('edu')) return 'school';
+  if (lower.includes('salary') || lower.includes('pay')) return 'cash-multiple';
+  return 'dots-horizontal';
+};
 
 export default function ScreenshotModal() {
   const router = useRouter();
@@ -48,6 +99,25 @@ export default function ScreenshotModal() {
   const [date, setDate] = useState('');
   const [tax, setTax] = useState('');
   const [transactionId, setTransactionId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [currency, setCurrency] = useState('INR');
+  const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarDate, setCalendarDate] = useState('');
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(false);
+  const [isYearPickerView, setIsYearPickerView] = useState(false);
+
+  const openCurrencyModal = React.useCallback(() => {
+    setIsCurrencyLoading(true);
+    setShowCurrencyModal(true);
+    useCurrencyStore.getState().fetchRates().finally(() => {
+      setTimeout(() => setIsCurrencyLoading(false), 250);
+    });
+  }, []);
+
+  const convert = useCurrencyStore((state) => state.convert);
 
   const pickScreenshot = async (selectedPreset?: string) => {
     try {
@@ -99,10 +169,12 @@ export default function ScreenshotModal() {
       setResult(ocrResult);
       setMerchant(ocrResult.merchant);
       setAmount(ocrResult.amount.toString());
-      setCategory(categoryResult.category);
-      setDate(ocrResult.date);
+      setCategory(categoryResult.category || 'Food');
+      setDate(ocrResult.date || expenseHelpers.getLocalDateString());
       setTax(ocrResult.tax ? ocrResult.tax.toString() : '0');
       setTransactionId(ocrResult.transactionId || 'N/A');
+      setPaymentMethod(ocrResult.paymentMethod || 'Online');
+      setCurrency(ocrResult.currency || 'INR');
       
       setIsScanning(false);
     } catch (e: any) {
@@ -129,11 +201,11 @@ export default function ScreenshotModal() {
       id: `exp_${Date.now()}`,
       amount: parsedAmount,
       merchant: merchant.trim(),
-      category,
-      date,
+      category: category || 'Other',
+      date: date || expenseHelpers.getLocalDateString(),
       time: result?.time || new Date().toTimeString().slice(0, 5),
-      paymentMethod: result?.paymentMethod || 'UPI',
-      currency: result?.currency || 'INR',
+      paymentMethod: paymentMethod || 'Online',
+      currency: currency || 'INR',
       tax: tax ? parseFloat(tax) : 0,
       notes: `Extracted from screenshot. Txn ID: ${transactionId}`,
       receiptImage: imageUri || undefined,
@@ -149,6 +221,7 @@ export default function ScreenshotModal() {
         title="IMPORT UPI"
         showBackButton={true}
         onBackPress={() => router.back()}
+        hideRightAction={true}
       />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -261,9 +334,9 @@ export default function ScreenshotModal() {
       ) : (
         result && (
           <View style={styles.resultsPanel}>
-            <Text style={[styles.previewHeading, { color: colors.text }]}>Review Extracted Details</Text>
+            <Text style={[styles.previewHeading, { color: colors.text }]}>AI Smart Verification ✨</Text>
             <Text style={[styles.previewSubText, { color: colors.textSecondary }]}>
-              Double check and adjust values computed from payment screenshot below.
+              Our AI engine extracted these details with high precision. Give them a quick review and fine-tune your expense in seconds! 🚀
             </Text>
 
             {/* Form Fields */}
@@ -273,58 +346,413 @@ export default function ScreenshotModal() {
                 style={[styles.previewInput, { color: colors.text, borderColor: colors.border }]}
                 value={merchant}
                 onChangeText={setMerchant}
+                placeholder="Receiver name"
+                placeholderTextColor={colors.textSecondary}
               />
 
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>AMOUNT</Text>
-              <TextInput
-                style={[styles.previewInput, { color: colors.text, borderColor: colors.border }]}
-                keyboardType="decimal-pad"
-                value={amount}
-                onChangeText={setAmount}
-              />
+              {/* Amount & Currency Conversion */}
+              <View style={{ marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>AMOUNT & CURRENCY</Text>
+                  
+                  {/* Currency Options Aligned Right */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {['USD', 'INR', 'GBP'].map((curr) => (
+                      <TouchableOpacity
+                        key={curr}
+                        onPress={() => setCurrency(curr)}
+                        style={[
+                          styles.currBadgePill,
+                          currency === curr
+                            ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                            : { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', borderColor: colors.border }
+                        ]}
+                      >
+                        <Text style={[styles.currBadgeText, currency === curr ? { color: '#FFF' } : { color: colors.textSecondary }]}>
+                          {curr}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      onPress={openCurrencyModal}
+                      style={[
+                        styles.currBadgePill,
+                        {
+                          backgroundColor: ['USD', 'INR', 'GBP'].includes(currency)
+                            ? (isDark ? '#1E293B' : '#F1F5F9')
+                            : colors.primary,
+                          borderColor: ['USD', 'INR', 'GBP'].includes(currency) ? colors.border : colors.primary,
+                          paddingHorizontal: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 2,
+                        }
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      {!['USD', 'INR', 'GBP'].includes(currency) && (
+                        <Text style={[styles.currBadgeText, { color: '#FFF', marginRight: 2 }]}>
+                          {currency}
+                        </Text>
+                      )}
+                      <ChevronDown size={14} color={!['USD', 'INR', 'GBP'].includes(currency) ? '#FFF' : colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-              <View style={styles.rowFields}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>AI CATEGORY</Text>
-                  <View style={styles.aiTagRow}>
+                <View style={styles.amountInputWithConversionRow}>
+                  <View style={[styles.amountInputBox, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}>
+                    <Text style={[styles.currencyPrefix, { color: colors.primary }]}>
+                      {expenseHelpers.getCurrencySymbol(currency)}
+                    </Text>
                     <TextInput
-                      style={[styles.previewInput, { color: colors.text, borderColor: colors.border, flex: 1, marginBottom: 0 }]}
-                      value={category}
-                      onChangeText={setCategory}
+                      style={[styles.amountInput, { color: colors.text }]}
+                      keyboardType="decimal-pad"
+                      value={amount}
+                      onChangeText={setAmount}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textSecondary}
                     />
-                    <View style={[styles.sparkBg, { backgroundColor: colors.primaryLight }]}>
-                      <Sparkles size={14} color={colors.primary} />
+                  </View>
+
+                  {/* Right-side Live INR Conversion Card */}
+                  <View style={[styles.inrConversionCard, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF', borderColor: colors.primary + '44' }]}>
+                    <View style={styles.inrConversionHeaderRow}>
+                      <Sparkles size={11} color={colors.primary} />
+                      <Text style={[styles.inrConversionLabel, { color: colors.primary }]}>LIVE INR CONVERSION</Text>
                     </View>
+                    <Text style={[styles.inrConvertedValue, { color: colors.text }]} numberOfLines={1}>
+                      ₹{convert(parseFloat(amount) || 0, currency, 'INR').toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                    <Text style={[styles.inrRateSub, { color: colors.textSecondary }]}>
+                      {currency === 'INR' ? 'Native Currency' : `1 ${currency} ≈ ₹${convert(1, currency, 'INR').toFixed(2)} INR`}
+                    </Text>
                   </View>
                 </View>
               </View>
 
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>TRANSACTION ID</Text>
+              {/* AI Category with Icon & Scroll Selection */}
+              <View style={{ marginTop: 14 }}>
+                <View style={styles.categoryHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.catIconCircle, { backgroundColor: colors.primary }]}>
+                      <MaterialCommunityIcons name={getCategoryIconName(category) as any} size={15} color="#FFF" />
+                    </View>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
+                      AI CATEGORY SELECTION
+                    </Text>
+                  </View>
+
+                  {/* Type Filter Toggle: Expense / Income */}
+                  <View style={styles.typeToggleRow}>
+                    <TouchableOpacity
+                      onPress={() => setTransactionType('expense')}
+                      style={[
+                        styles.typePill,
+                        transactionType === 'expense'
+                          ? { backgroundColor: '#EF4444', borderColor: '#EF4444' }
+                          : { borderColor: colors.border }
+                      ]}
+                    >
+                      <Text style={[styles.typePillText, transactionType === 'expense' && { color: '#FFF' }]}>Expense</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setTransactionType('income')}
+                      style={[
+                        styles.typePill,
+                        transactionType === 'income'
+                          ? { backgroundColor: '#10B981', borderColor: '#10B981' }
+                          : { borderColor: colors.border }
+                      ]}
+                    >
+                      <Text style={[styles.typePillText, transactionType === 'income' && { color: '#FFF' }]}>Income</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Category Scroll Selection */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryScrollContainer}
+                  style={{ marginTop: 8 }}
+                >
+                  {(transactionType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((item) => {
+                    const isSelected = category.toLowerCase() === item.name.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={item.name}
+                        onPress={() => setCategory(item.name)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.categoryChip,
+                          {
+                            backgroundColor: isSelected
+                              ? item.color + '22'
+                              : isDark
+                              ? '#1E293B'
+                              : '#F1F5F9',
+                            borderColor: isSelected ? item.color : colors.border,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.chipIconBox, { backgroundColor: isSelected ? item.color : 'rgba(150,150,150,0.15)' }]}>
+                          <MaterialCommunityIcons
+                            name={item.icon as any}
+                            size={14}
+                            color={isSelected ? '#FFF' : colors.textSecondary}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            {
+                              color: isSelected ? (isDark ? '#FFF' : '#0F172A') : colors.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        {isSelected && (
+                          <Check size={12} color={item.color} style={{ marginLeft: 4 }} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 14 }]}>TRANSACTION ID</Text>
               <TextInput
                 style={[styles.previewInput, { color: colors.text, borderColor: colors.border }]}
                 value={transactionId}
                 onChangeText={setTransactionId}
+                placeholder="UPI / Bank Reference ID"
+                placeholderTextColor={colors.textSecondary}
               />
 
+              {/* Date & Tax Input Row */}
               <View style={[styles.rowFields, { marginTop: 12 }]}>
-                <View style={{ flex: 1 }}>
+                {/* Date Selection using react-native-calendars */}
+                <View style={{ flex: 1.8 }}>
                   <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>DATE</Text>
-                  <TextInput
-                    style={[styles.previewInput, { color: colors.text, borderColor: colors.border }]}
-                    value={date}
-                    onChangeText={setDate}
-                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCalendarDate(date || expenseHelpers.getLocalDateString());
+                      setShowDatePicker(true);
+                    }}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.datePickerTrigger,
+                      { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', justifyContent: 'space-between' }
+                    ]}
+                  >
+                    <Text style={[styles.dateText, { color: date ? colors.text : colors.textSecondary }]}>
+                      {date || 'Select Date'}
+                    </Text>
+                    <CalendarIcon size={16} color={colors.primary} />
+                  </TouchableOpacity>
                 </View>
+
+                {/* Reduced Width Tax Input */}
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TAX</Text>
-                  <TextInput
-                    style={[styles.previewInput, { color: colors.text, borderColor: colors.border }]}
-                    value={tax}
-                    onChangeText={setTax}
-                  />
+                  <View
+                    style={[
+                      styles.taxInputBox,
+                      { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }
+                    ]}
+                  >
+                    <TextInput
+                      style={[styles.taxInput, { color: colors.text }]}
+                      keyboardType="decimal-pad"
+                      value={tax}
+                      onChangeText={setTax}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                    <Text style={[styles.taxSuffix, { color: colors.textSecondary }]}>
+                      {expenseHelpers.getCurrencySymbol(currency)}
+                    </Text>
+                  </View>
                 </View>
               </View>
+
+              {/* Payment Method Selection (Default: UPI) */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>PAYMENT METHOD</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8 }}
+                  style={{ marginTop: 6 }}
+                >
+                  {[
+                    'UPI',
+                    'Online',
+                    'Credit Card',
+                    'Debit Card',
+                    'Cash',
+                    'Net Banking',
+                  ].map((method) => {
+                    const isSelected = (paymentMethod || 'UPI').toLowerCase() === method.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={method}
+                        onPress={() => setPaymentMethod(method)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.paymentChip,
+                          isSelected
+                            ? {
+                                backgroundColor: colors.primary,
+                                borderColor: colors.primary,
+                                shadowColor: colors.primary,
+                                shadowOpacity: 0.35,
+                                shadowRadius: 6,
+                                elevation: 4,
+                              }
+                            : {
+                                backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                                borderColor: colors.border,
+                              },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.paymentChipText,
+                            {
+                              color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                              fontWeight: isSelected ? '800' : '500',
+                            },
+                          ]}
+                        >
+                          {method}
+                        </Text>
+                        {isSelected && <Check size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </Card>
+
+            {/* Calendar Modal with Vertical Scroll Year Picker */}
+            <Modal
+              visible={showDatePicker}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <TouchableOpacity
+                style={styles.calendarModalOverlay}
+                activeOpacity={1}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <TouchableOpacity
+                  activeOpacity={1}
+                  style={[styles.calendarModalContent, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}
+                >
+                  <View style={styles.calendarModalHeader}>
+                    <TouchableOpacity
+                      onPress={() => setIsYearPickerView(!isYearPickerView)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={[styles.calendarModalTitle, { color: colors.text }]}>
+                        {isYearPickerView ? 'Select Year' : 'Select Date'}
+                      </Text>
+                      <ChevronDown size={18} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { setShowDatePicker(false); setIsYearPickerView(false); }}>
+                      <X size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {isYearPickerView ? (
+                    <View style={{ height: 320 }}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
+                        SCROLL TO CHOOSE YEAR (1990 - 2035)
+                      </Text>
+                      <ScrollView
+                        showsVerticalScrollIndicator={true}
+                        contentContainerStyle={{ gap: 6, paddingBottom: 16 }}
+                      >
+                        {Array.from({ length: 46 }, (_, i) => 1990 + i).map((yr) => {
+                          const activeYear = parseInt((calendarDate || date || expenseHelpers.getLocalDateString()).split('-')[0]);
+                          const isSelected = activeYear === yr;
+                          return (
+                            <TouchableOpacity
+                              key={yr}
+                              onPress={() => {
+                                const base = calendarDate || date || expenseHelpers.getLocalDateString();
+                                const parts = base.split('-');
+                                const month = parts[1] || '01';
+                                const day = parts[2] || '01';
+                                setCalendarDate(`${yr}-${month}-${day}`);
+                                setIsYearPickerView(false);
+                              }}
+                              style={[
+                                styles.verticalYearRow,
+                                {
+                                  backgroundColor: isSelected
+                                    ? colors.primary
+                                    : (isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9'),
+                                  borderColor: isSelected ? colors.primary : colors.border,
+                                }
+                              ]}
+                            >
+                              <Text style={[styles.verticalYearText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
+                                {yr}
+                              </Text>
+                              {isSelected && <Check size={16} color="#FFFFFF" />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setIsYearPickerView(true)}
+                        style={[styles.yearToggleBar, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }]}
+                      >
+                        <Text style={[styles.yearToggleBarText, { color: colors.primary }]}>
+                          Year: {(calendarDate || date || expenseHelpers.getLocalDateString()).split('-')[0]} (Tap to change year vertically)
+                        </Text>
+                        <ChevronDown size={16} color={colors.primary} />
+                      </TouchableOpacity>
+
+                      <RNCalendar
+                        key={calendarDate || date}
+                        current={calendarDate || date || expenseHelpers.getLocalDateString()}
+                        onDayPress={(day: DateData) => {
+                          setDate(day.dateString);
+                          setCalendarDate(day.dateString);
+                          setShowDatePicker(false);
+                          setIsYearPickerView(false);
+                        }}
+                        enableSwipeMonths={true}
+                        markedDates={{
+                          [date]: { selected: true, selectedColor: colors.primary }
+                        }}
+                        theme={{
+                          calendarBackground: isDark ? '#1E293B' : '#FFFFFF',
+                          textSectionTitleColor: colors.textSecondary,
+                          selectedDayBackgroundColor: colors.primary,
+                          selectedDayTextColor: '#FFFFFF',
+                          todayTextColor: colors.primary,
+                          dayTextColor: colors.text,
+                          textDisabledColor: isDark ? '#475569' : '#CBD5E1',
+                          monthTextColor: colors.text,
+                          arrowColor: colors.primary,
+                        }}
+                      />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Modal>
 
             {/* Confidence Score info */}
             <View style={styles.confidenceRow}>
@@ -362,6 +790,109 @@ export default function ScreenshotModal() {
         <View style={{ height: 40 }} />
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Full Currency Picker Modal */}
+      <Modal
+        visible={showCurrencyModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCurrencyModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.calendarModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCurrencyModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.currencyModalContent,
+              { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: colors.border }
+            ]}
+          >
+            <View style={styles.calendarModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Globe size={18} color={colors.primary} />
+                <Text style={[styles.calendarModalTitle, { color: colors.text }]}>Select Base Currency</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input Bar */}
+            <View style={[styles.currencySearchBox, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }]}>
+              <Search size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.currencySearchInput, { color: colors.text }]}
+                value={currencySearchQuery}
+                onChangeText={setCurrencySearchQuery}
+                placeholder="Search currency code or name..."
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+              />
+              {currencySearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setCurrencySearchQuery('')}>
+                  <X size={14} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Currency List */}
+            {isCurrencyLoading ? (
+              <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+                  Syncing Live Exchange Rates...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={true}>
+                {searchCurrencies(currencySearchQuery).map((c) => {
+                  const isSelected = currency === c.code;
+                  return (
+                    <TouchableOpacity
+                      key={c.code}
+                      onPress={() => {
+                        setCurrency(c.code);
+                        setShowCurrencyModal(false);
+                        setCurrencySearchQuery('');
+                      }}
+                      style={[
+                        styles.currencyRowItem,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primary + '15'
+                            : 'transparent',
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.currencyCodeBadge, { backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }]}>
+                          <Text style={[styles.currencyCodeBadgeText, { color: isSelected ? '#FFF' : colors.text }]}>
+                            {c.code}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={[styles.currencyNameText, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
+                            {c.name}
+                          </Text>
+                          <Text style={[styles.currencySymbolText, { color: colors.textSecondary }]}>
+                            Symbol: {c.symbol}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isSelected && <Check size={16} color={colors.primary} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -564,5 +1095,264 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  amountInputWithConversionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  amountInputBox: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    height: 48,
+    paddingHorizontal: 12,
+  },
+  currencyPrefix: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginRight: 6,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  inrConversionCard: {
+    flex: 1.3,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+  },
+  inrConversionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  inrConversionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  inrConvertedValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  inrRateSub: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  currBadgePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  currBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  categoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  catIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeToggleRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  typePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  typePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  categoryScrollContainer: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  chipIconBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  categoryChipText: {
+    fontSize: 12,
+  },
+  datePickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    height: 42,
+    paddingHorizontal: 12,
+  },
+  dateText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  taxInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    height: 42,
+    paddingHorizontal: 12,
+  },
+  taxInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  taxSuffix: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  paymentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  paymentChipText: {
+    fontSize: 12,
+  },
+  calendarModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  calendarModalContent: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  calendarModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  calendarModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  yearToggleBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  yearToggleBarText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  verticalYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  verticalYearText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  currencyModalContent: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  currencySearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    height: 42,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  currencySearchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  currencyRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 6,
+  },
+  currencyCodeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  currencyCodeBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  currencyNameText: {
+    fontSize: 13,
+  },
+  currencySymbolText: {
+    fontSize: 11,
   },
 });

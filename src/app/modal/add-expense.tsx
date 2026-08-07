@@ -222,6 +222,7 @@ export default function AddExpenseModal() {
         title={isEditMode ? 'EDIT TRANSACTION' : 'ADD TRANSACTION'}
         showBackButton={true}
         onBackPress={() => router.back()}
+        hideRightAction={true}
       />
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         {/* Amount Input Card */}

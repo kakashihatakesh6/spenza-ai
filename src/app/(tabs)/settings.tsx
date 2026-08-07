@@ -10,6 +10,7 @@ import {
   Switch,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,10 +19,13 @@ import { useExpenseStore } from '../../store/expenseStore';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useCurrencyStore } from '../../store/currencyStore';
 import { exportService } from '../../services/exportService';
 import { notificationService } from '../../services/notificationService';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Header } from '../../components/Header';
+
+import { ALL_CURRENCIES, searchCurrencies } from '../../constants/currencies';
 
 // Redesigned components
 import { SettingsCard } from '../../components/settings/SettingsCard';
@@ -38,6 +42,12 @@ export default function SettingsScreen() {
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(false);
+  const [exportFilename, setExportFilename] = useState('');
+  const [showTestCenter, setShowTestCenter] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -68,32 +78,34 @@ export default function SettingsScreen() {
   }, []);
 
   const selectCurrency = useCallback(() => {
-    useAlertStore.getState().showAlert(
-      'Select Currency',
-      'Choose your preferred base currency symbol:',
-      'info',
-      [
-        { text: 'USD ($)', onPress: () => setCurrency('USD') },
-        { text: 'INR (₹)', onPress: () => setCurrency('INR') },
-        { text: 'EUR (€)', onPress: () => setCurrency('EUR') },
-        { text: 'GBP (£)', onPress: () => setCurrency('GBP') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  }, [setCurrency]);
+    setIsCurrencyLoading(true);
+    setCurrencyModalVisible(true);
+    useCurrencyStore.getState().fetchRates().finally(() => {
+      setTimeout(() => setIsCurrencyLoading(false), 250);
+    });
+  }, []);
 
-  const handleExportCSV = useCallback(async () => {
+  const triggerCSVExportFlow = useCallback(() => {
     if (expenses.length === 0) {
       useAlertStore.getState().showAlert('No Data', 'You have no transactions to export.', 'warning');
       return;
     }
-    try {
-      const path = await exportService.exportToCSV(expenses);
-      useAlertStore.getState().showAlert('Export Successful', `Expenses CSV file successfully created and saved to:\n\n${path}`, 'success');
-    } catch (e) {
-      useAlertStore.getState().showAlert('Export Failed', 'An error occurred during CSV creation.', 'error');
-    }
+    const defaultName = `expenses_export_${new Date().toISOString().split('T')[0]}`;
+    setExportFilename(defaultName);
+    setExportModalVisible(true);
   }, [expenses]);
+
+  const confirmSaveCSV = useCallback(async () => {
+    setExportModalVisible(false);
+    try {
+      const res = await exportService.saveCSVToCustomLocation(expenses, exportFilename);
+      if (res.success && res.path) {
+        useAlertStore.getState().showAlert('Export Ready', `CSV report generated successfully!\n\nLocation:\n${res.path}`, 'success');
+      }
+    } catch (e) {
+      useAlertStore.getState().showAlert('Export Failed', 'An error occurred while preparing the CSV file.', 'error');
+    }
+  }, [expenses, exportFilename]);
 
   const handleExportJSON = useCallback(async () => {
     if (expenses.length === 0) {
@@ -369,6 +381,148 @@ export default function SettingsScreen() {
     );
   };
 
+  const renderExportFilenameModal = () => (
+    <Modal
+      visible={exportModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setExportModalVisible(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ width: '100%', maxWidth: 340, backgroundColor: colors.card, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 }}>Export CSV File</Text>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 16 }}>Specify a custom filename for your exported CSV expense report:</Text>
+          <TextInput
+            value={exportFilename}
+            onChangeText={setExportFilename}
+            placeholder="expenses_export"
+            placeholderTextColor={colors.textSecondary}
+            style={{
+              height: 48,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+              color: colors.text,
+              paddingHorizontal: 14,
+              fontSize: 14,
+              fontWeight: '600',
+              marginBottom: 20,
+            }}
+            autoCapitalize="none"
+          />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setExportModalVisible(false)}
+              style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={confirmSaveCSV}
+              style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Save & Export</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderCurrencyModal = () => (
+    <Modal
+      visible={currencyModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setCurrencyModalVisible(false)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+        activeOpacity={1}
+        onPress={() => setCurrencyModalVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ width: '100%', maxWidth: 360, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.border }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Select Base Currency</Text>
+            <TouchableOpacity onPress={() => setCurrencyModalVisible(false)}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Box */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, height: 42, paddingHorizontal: 12, marginBottom: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }}>
+            <Ionicons name="search-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.text }}
+              value={currencySearchQuery}
+              onChangeText={setCurrencySearchQuery}
+              placeholder="Search code or name..."
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+            />
+            {currencySearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setCurrencySearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {isCurrencyLoading ? (
+            <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+                Syncing Live Exchange Rates...
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={true}>
+              {searchCurrencies(currencySearchQuery).map((c) => {
+                const isSelected = settings.currency === c.code;
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    onPress={() => {
+                      setCurrency(c.code as any);
+                      setCurrencyModalVisible(false);
+                      setCurrencySearchQuery('');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
+                      marginBottom: 6,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: isSelected ? '#FFF' : colors.text }}>{c.code}</Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: colors.text }}>{c.name}</Text>
+                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>Symbol: {c.symbol}</Text>
+                      </View>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const clockColonStyle = [styles.clockColon, { color: colors.textSecondary }];
 
   return (
@@ -377,12 +531,10 @@ export default function SettingsScreen() {
         title="SETTINGS"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="check"
-        onRightPress={() => {
-          useAlertStore.getState().showAlert('Success', 'Settings saved successfully!', 'success');
-        }}
       />
       
+      {renderCurrencyModal()}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -404,25 +556,42 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* Payment Methods */}
-        <SectionHeader title="Payment Methods" />
+        {/* Income */}
+        <SectionHeader title="Income" />
         <SettingsCard>
           <SettingsRow
-            icon="card-outline"
+            icon="wallet-outline"
             iconBg="#E0F2FE"
             iconColor="#0EA5E9"
-            title="Main Balance"
-            subtitle={`Base Currency: ${settings.currency}`}
+            title="Income"
+            subtitle={
+              <View style={{ marginTop: 2 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '500' }}>
+                  Monthly: {expenseHelpers.getCurrencySymbol(settings.currency)}{(user?.user_metadata?.monthly_income || 50000).toLocaleString()} • Yearly: {expenseHelpers.getCurrencySymbol(settings.currency)}{(user?.user_metadata?.yearly_income || 600000).toLocaleString()}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                  <View
+                    style={{
+                      backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EFF6FF',
+                      borderColor: colors.primary,
+                      borderWidth: 1,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Ionicons name="globe-outline" size={12} color={colors.primary} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
+                      Base Currency: {settings.currency} ({expenseHelpers.getCurrencySymbol(settings.currency)})
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            }
             onPress={selectCurrency}
-          />
-          <View style={dividerStyle} />
-          <SettingsRow
-            icon="cloud-done-outline"
-            iconBg="#F0FDF4"
-            iconColor="#16A34A"
-            title="Connected Banks"
-            subtitle={user ? 'Synced with Supabase Cloud' : 'Offline Cache Database'}
-            onPress={() => useAlertStore.getState().showAlert('Bank Integration', 'Open banking links are coming soon!', 'info')}
           />
         </SettingsCard>
 
@@ -596,48 +765,63 @@ export default function SettingsScreen() {
 
               {/* Notification Testing Center */}
               <View style={styles.nestedRowBlock}>
-                <Text style={nestedTitleStyle}>Notification Testing Center</Text>
-                <Text style={[helpTextStyle, { marginBottom: 12 }]}>
-                  Test how spending alerts will render natively on your device.
-                </Text>
-                
-                <View style={styles.testList}>
-                  <TouchableOpacity 
-                    onPress={handleTestDailyReminder} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="notifications" size={16} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Mock Daily Reminder</Text>
-                    <Text style={[styles.testListBadge, { color: colors.primary, backgroundColor: colors.primaryLight }]}>Test</Text>
-                  </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setShowTestCenter(!showTestCenter)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={nestedTitleStyle}>Notification Testing Center</Text>
+                    <Text style={helpTextStyle}>
+                      {showTestCenter ? 'Tap to hide mock notification triggers.' : 'Tap to expand mock notification testing controls.'}
+                    </Text>
+                  </View>
+                  <Ionicons 
+                    name={showTestCenter ? "chevron-up" : "chevron-down"} 
+                    size={18} 
+                    color={colors.primary} 
+                  />
+                </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    onPress={handleTestWarning} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.warning + '20' }]}>
-                      <Ionicons name="alert-circle" size={16} color={colors.warning} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Warning ({settings.budgetWarningThreshold || 80}%)</Text>
-                    <Text style={[styles.testListBadge, { color: colors.warning, backgroundColor: colors.warning + '20' }]}>Test</Text>
-                  </TouchableOpacity>
+                {showTestCenter && (
+                  <View style={[styles.testList, { marginTop: 12 }]}>
+                    <TouchableOpacity 
+                      onPress={handleTestDailyReminder} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.primaryLight }]}>
+                        <Ionicons name="notifications" size={16} color={colors.primary} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Mock Daily Reminder</Text>
+                      <Text style={[styles.testListBadge, { color: colors.primary, backgroundColor: colors.primaryLight }]}>Test</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    onPress={handleTestExceeded} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.danger + '20' }]}>
-                      <Ionicons name="alert" size={16} color={colors.danger} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Exceeded Alert</Text>
-                    <Text style={[styles.testListBadge, { color: colors.danger, backgroundColor: colors.danger + '20' }]}>Test</Text>
-                  </TouchableOpacity>
-                </View>
+                    <TouchableOpacity 
+                      onPress={handleTestWarning} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.warning + '20' }]}>
+                        <Ionicons name="alert-circle" size={16} color={colors.warning} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Warning ({settings.budgetWarningThreshold || 80}%)</Text>
+                      <Text style={[styles.testListBadge, { color: colors.warning, backgroundColor: colors.warning + '20' }]}>Test</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      onPress={handleTestExceeded} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.danger + '20' }]}>
+                        <Ionicons name="alert" size={16} color={colors.danger} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Exceeded Alert</Text>
+                      <Text style={[styles.testListBadge, { color: colors.danger, backgroundColor: colors.danger + '20' }]}>Test</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -652,7 +836,7 @@ export default function SettingsScreen() {
             iconColor="#0EA5E9"
             title="Export CSV Report"
             subtitle="Generate table file format for Excel"
-            onPress={handleExportCSV}
+            onPress={triggerCSVExportFlow}
           />
           <View style={dividerStyle} />
           <SettingsRow
@@ -711,6 +895,7 @@ export default function SettingsScreen() {
 
       {renderThemeModal()}
       {renderLogoutModal()}
+      {renderExportFilenameModal()}
     </View>
   );
 }

@@ -10,15 +10,18 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
+import { useCurrencyStore } from '../../store/currencyStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/Header';
 import { useAlertStore } from '../../store/alertStore';
 import { logger } from '../../services/logger';
-import { Camera, Check, ArrowLeft, Image as ImageIcon, Sparkles } from 'lucide-react-native';
+import { Camera, Check, ArrowLeft, Image as ImageIcon, Sparkles, ChevronDown, Search, Globe, X } from 'lucide-react-native';
+import { ALL_CURRENCIES, searchCurrencies } from '../../constants/currencies';
 import { storageService } from '../../services/storage.service';
 
 const COLOR_PRESETS = [
@@ -40,20 +43,45 @@ export default function EditProfileScreen() {
 
   const initialUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || '';
   const initialAvatar = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '';
+  const initialMonthly = user?.user_metadata?.monthly_income ? String(user.user_metadata.monthly_income) : '50000';
+  const initialYearly = user?.user_metadata?.yearly_income ? String(user.user_metadata.yearly_income) : String(Number(initialMonthly) * 12);
+  const initialCurrency = user?.user_metadata?.preferred_currency || 'INR';
 
   const [username, setUsername] = useState(initialUsername);
   const [email, setEmail] = useState(user?.email || '');
   const [bio, setBio] = useState(user?.user_metadata?.bio || 'Smart Spender 🚀');
   const [avatarUrl, setAvatarUrl] = useState(initialAvatar);
+  const [monthlyIncome, setMonthlyIncome] = useState(initialMonthly);
+  const [yearlyIncome, setYearlyIncome] = useState(initialYearly);
+  const [preferredCurrency, setPreferredCurrency] = useState(initialCurrency);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+
+  const openCurrencyModal = React.useCallback(() => {
+    setIsCurrencyLoading(true);
+    setShowCurrencyModal(true);
+    useCurrencyStore.getState().fetchRates().finally(() => {
+      setTimeout(() => setIsCurrencyLoading(false), 250);
+    });
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({
       headerShown: false,
     });
   }, [navigation]);
+
+  const handleMonthlyIncomeChange = (val: string) => {
+    setMonthlyIncome(val);
+    const num = Number(val);
+    if (!isNaN(num) && num >= 0) {
+      setYearlyIncome(String(num * 12));
+    }
+  };
 
   const requestPermissionAndPickImage = async () => {
     try {
@@ -115,10 +143,23 @@ export default function EditProfileScreen() {
         }
       }
 
-      await updateProfile(username.trim(), finalAvatarUrl);
+      const parsedMonthly = parseFloat(monthlyIncome) || 0;
+      const parsedYearly = parseFloat(yearlyIncome) || 0;
+
+      await updateProfile(username.trim(), finalAvatarUrl, {
+        bio,
+        monthly_income: parsedMonthly,
+        yearly_income: parsedYearly,
+        preferred_currency: preferredCurrency,
+      });
+
+      // Synchronize preferred base currency with settings store
+      const { useSettingsStore } = await import('../../store/settingsStore');
+      useSettingsStore.getState().setCurrency(preferredCurrency as any);
+
       setIsSaving(false);
       isSavingRef.current = false;
-      useAlertStore.getState().showAlert('Success', 'Profile updated successfully!', 'success', [
+      useAlertStore.getState().showAlert('Success', 'Profile details updated successfully!', 'success', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (err) {
@@ -136,8 +177,7 @@ export default function EditProfileScreen() {
         title="EDIT PROFILE"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="check"
-        onRightPress={handleSave}
+        hideRightAction={true}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -254,6 +294,193 @@ export default function EditProfileScreen() {
               numberOfLines={3}
             />
           </View>
+
+          {/* Income & Preferred Currency Section */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Preferred Base Currency</Text>
+            
+            {/* Currency Dropdown Trigger Box */}
+            <TouchableOpacity
+              onPress={openCurrencyModal}
+              style={[
+                styles.currencyDropdownTrigger,
+                {
+                  backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+                  borderColor: colors.border,
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.activeCurrencyBadgeCircle, { backgroundColor: colors.primary }]}>
+                  <Globe size={14} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={[styles.activeCurrencyCodeText, { color: colors.text }]}>
+                    {preferredCurrency} - {ALL_CURRENCIES.find((c) => c.code === preferredCurrency)?.name || preferredCurrency}
+                  </Text>
+                  <Text style={[styles.activeCurrencySymbolSub, { color: colors.textSecondary }]}>
+                    Symbol: {ALL_CURRENCIES.find((c) => c.code === preferredCurrency)?.symbol || '$'}
+                  </Text>
+                </View>
+              </View>
+
+              <ChevronDown size={18} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputRow}>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Monthly Income ({preferredCurrency})</Text>
+              <View
+                style={[
+                  styles.incomeInputContainer,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={[styles.incomeCurrencyTag, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF' }]}>
+                  <Text style={[styles.incomeCurrencyTagText, { color: colors.primary }]}>{preferredCurrency}</Text>
+                </View>
+                <TextInput
+                  value={monthlyIncome}
+                  onChangeText={handleMonthlyIncomeChange}
+                  placeholder="50000"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                  style={[styles.incomeTextInput, { color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Yearly Income ({preferredCurrency})</Text>
+              <View
+                style={[
+                  styles.incomeInputContainer,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={[styles.incomeCurrencyTag, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF' }]}>
+                  <Text style={[styles.incomeCurrencyTagText, { color: colors.primary }]}>{preferredCurrency}</Text>
+                </View>
+                <TextInput
+                  value={yearlyIncome}
+                  onChangeText={setYearlyIncome}
+                  placeholder="600000"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.textSecondary}
+                  style={[styles.incomeTextInput, { color: colors.text }]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Full Currency Picker Dropdown Modal */}
+          <Modal
+            visible={showCurrencyModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowCurrencyModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowCurrencyModal(false)}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                style={[
+                  styles.currencyModalCard,
+                  { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: colors.border }
+                ]}
+              >
+                <View style={styles.modalHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Globe size={20} color={colors.primary} />
+                    <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Choose Preferred Currency</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                    <X size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Search Bar */}
+                <View style={[styles.modalSearchBox, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }]}>
+                  <Search size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.modalSearchInput, { color: colors.text }]}
+                    value={currencySearchQuery}
+                    onChangeText={setCurrencySearchQuery}
+                    placeholder="Search short code or full name..."
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="none"
+                  />
+                  {currencySearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setCurrencySearchQuery('')}>
+                      <X size={14} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Currency List */}
+                {isCurrencyLoading ? (
+                  <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+                      Syncing Live Exchange Rates...
+                    </Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={true}>
+                    {searchCurrencies(currencySearchQuery).map((c) => {
+                      const isSelected = preferredCurrency === c.code;
+                      return (
+                        <TouchableOpacity
+                          key={c.code}
+                          onPress={() => {
+                            setPreferredCurrency(c.code);
+                            setShowCurrencyModal(false);
+                            setCurrencySearchQuery('');
+                          }}
+                          style={[
+                            styles.currencyRowItem,
+                            {
+                              backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
+                              borderColor: isSelected ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={[styles.currencyCodeBadge, { backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }]}>
+                              <Text style={[styles.currencyCodeBadgeText, { color: isSelected ? '#FFF' : colors.text }]}>
+                                {c.code}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text style={[styles.currencyFullName, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
+                                {c.name}
+                              </Text>
+                              <Text style={[styles.currencySymbolSub, { color: colors.textSecondary }]}>
+                                Symbol: {c.symbol}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {isSelected && <Check size={18} color={colors.primary} />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
         </View>
 
         <TouchableOpacity
@@ -298,9 +525,125 @@ const styles = StyleSheet.create({
   saveBtnText: {
     padding: 8,
   },
-  saveText: {
-    fontSize: 14,
+  saveBtnTextContent: {
+    fontSize: 15,
     fontWeight: '800',
+    color: '#FFF',
+  },
+  currencyDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+  },
+  activeCurrencyBadgeCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeCurrencyCodeText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activeCurrencySymbolSub: {
+    fontSize: 11,
+  },
+  incomeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    overflow: 'hidden',
+  },
+  incomeCurrencyTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  incomeCurrencyTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  incomeTextInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingRight: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  currencyModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    height: 42,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  currencyRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 6,
+  },
+  currencyCodeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  currencyCodeBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  currencyFullName: {
+    fontSize: 13,
+  },
+  currencySymbolSub: {
+    fontSize: 11,
   },
   content: {
     flex: 1,
@@ -408,6 +751,25 @@ const styles = StyleSheet.create({
   inputGroup: {
     gap: 8,
   },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  currencyPillGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  currencyPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   label: {
     fontSize: 11,
     fontWeight: '700',
@@ -450,10 +812,5 @@ const styles = StyleSheet.create({
         elevation: 4,
       },
     }),
-  },
-  saveBtnTextContent: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '800',
   },
 });
