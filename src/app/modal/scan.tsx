@@ -679,9 +679,9 @@ export default function OCRScanModal() {
       ) : (
         ocrResult && (
           <View style={styles.resultsPanel}>
-            <Text style={[styles.previewHeading, { color: colors.text }]}>Review Extracted Details</Text>
+            <Text style={[styles.previewHeading, { color: colors.text }]}>AI Smart Verification ✨</Text>
             <Text style={[styles.previewSubText, { color: colors.textSecondary }]}>
-              Double check and adjust values computed by OCR and AI engines below.
+              Our AI engine extracted these details with high precision. Give them a quick review and fine-tune your expense in seconds! 🚀
             </Text>
 
             {/* Merchant details */}
@@ -722,11 +722,25 @@ export default function OCRScanModal() {
                       onPress={() => setShowCurrencyModal(true)}
                       style={[
                         styles.currBadgePill,
-                        { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: colors.border, paddingHorizontal: 8 }
+                        {
+                          backgroundColor: ['USD', 'INR', 'GBP'].includes(currency)
+                            ? (isDark ? '#1E293B' : '#F1F5F9')
+                            : colors.primary,
+                          borderColor: ['USD', 'INR', 'GBP'].includes(currency) ? colors.border : colors.primary,
+                          paddingHorizontal: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 2,
+                        }
                       ]}
                       activeOpacity={0.7}
                     >
-                      <ChevronDown size={14} color={colors.primary} />
+                      {!['USD', 'INR', 'GBP'].includes(currency) && (
+                        <Text style={[styles.currBadgeText, { color: '#FFF', marginRight: 2 }]}>
+                          {currency}
+                        </Text>
+                      )}
+                      <ChevronDown size={14} color={!['USD', 'INR', 'GBP'].includes(currency) ? '#FFF' : colors.primary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1125,9 +1139,103 @@ export default function OCRScanModal() {
           </View>
         )
       )}
-      <View style={{ height: 40 }} />
+          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Full Currency Picker Modal */}
+      <Modal
+        visible={showCurrencyModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCurrencyModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.calendarModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCurrencyModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.currencyModalContent,
+              { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: colors.border }
+            ]}
+          >
+            <View style={styles.calendarModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Globe size={18} color={colors.primary} />
+                <Text style={[styles.calendarModalTitle, { color: colors.text }]}>Select Base Currency</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input Bar */}
+            <View style={[styles.currencySearchBox, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }]}>
+              <Search size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.currencySearchInput, { color: colors.text }]}
+                value={currencySearchQuery}
+                onChangeText={setCurrencySearchQuery}
+                placeholder="Search currency code or name..."
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+              />
+              {currencySearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setCurrencySearchQuery('')}>
+                  <X size={14} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Currency List */}
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={true}>
+              {searchCurrencies(currencySearchQuery).map((c) => {
+                const isSelected = currency === c.code;
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    onPress={() => {
+                      setCurrency(c.code);
+                      setShowCurrencyModal(false);
+                      setCurrencySearchQuery('');
+                    }}
+                    style={[
+                      styles.currencyRowItem,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primary + '15'
+                          : 'transparent',
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={[styles.currencyCodeBadge, { backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }]}>
+                        <Text style={[styles.currencyCodeBadgeText, { color: isSelected ? '#FFF' : colors.text }]}>
+                          {c.code}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.currencyNameText, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
+                          {c.name}
+                        </Text>
+                        <Text style={[styles.currencySymbolText, { color: colors.textSecondary }]}>
+                          Symbol: {c.symbol}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {isSelected && <Check size={16} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1622,7 +1730,7 @@ const styles = StyleSheet.create({
   },
   aiIntroDesc: {
     color: '#94A3B8',
-    fontSize: 11.5,
+    fontSize: 11,
     lineHeight: 16,
     marginBottom: 12,
   },

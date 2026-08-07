@@ -540,16 +540,38 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* Main Balance & Base Currency */}
-        <SectionHeader title="Main Balance & Currency" />
+        {/* Income & Base Currency */}
+        <SectionHeader title="Income" />
         <SettingsCard>
           <SettingsRow
-            icon="card-outline"
+            icon="wallet-outline"
             iconBg="#E0F2FE"
             iconColor="#0EA5E9"
-            title="Main Balance"
+            title="Income & Base Currency"
             subtitle={`Monthly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.monthly_income || 50000).toLocaleString()} • Yearly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.yearly_income || 600000).toLocaleString()}`}
             onPress={selectCurrency}
+            rightElement={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View
+                  style={{
+                    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EFF6FF',
+                    borderColor: colors.primary,
+                    borderWidth: 1,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
+                    {settings.currency} ({expenseHelpers.getCurrencySymbol(settings.currency)})
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={colors.primary} />
+                </View>
+              </View>
+            }
           />
         </SettingsCard>
 
