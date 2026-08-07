@@ -90,8 +90,7 @@ export default function BudgetModal() {
         title="SET BUDGET"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="check"
-        onRightPress={handleSaveBudget}
+        hideRightAction={true}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
