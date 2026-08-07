@@ -323,15 +323,15 @@ USING (bucket_id = 'profile-pics');
 Set secrets required by Deno Edge Functions in your Supabase project secrets store:
 
 ```bash
-supabase secrets set GEMINI_API_KEY="your-google-gemini-api-key"
-supabase secrets set GROQ_API_KEY="your-groq-api-key"
+npx supabase secrets set GEMINI_API_KEY="your-google-gemini-api-key"
+npx supabase secrets set GROQ_API_KEY="your-groq-api-key"
 ```
 
 #### 5. Deploy Edge Functions
 Deploy the `chat` Edge Function which powers the AI Financial Agent:
 
 ```bash
-supabase functions deploy chat --no-verify-jwt
+npx supabase functions deploy chat --no-verify-jwt
 ```
 
 ---
