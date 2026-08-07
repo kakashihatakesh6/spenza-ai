@@ -8,7 +8,7 @@ interface SettingsRowProps {
   iconBg: string;
   iconColor: string;
   title: string;
-  subtitle?: string;
+  subtitle?: string | React.ReactNode;
   onPress?: () => void;
   rightElement?: React.ReactNode;
 }
@@ -35,7 +35,7 @@ export const SettingsRow: React.FC<SettingsRowProps> = React.memo(({
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
       accessibilityRole={onPress ? 'button' : 'none'}
-      accessibilityLabel={`${title}${subtitle ? `, ${subtitle}` : ''}`}
+      accessibilityLabel={`${title}`}
     >
       <View style={[styles.iconContainer, { backgroundColor: dynamicIconBg }]}>
         <Ionicons name={icon} size={20} color={dynamicIconColor} />
@@ -43,8 +43,10 @@ export const SettingsRow: React.FC<SettingsRowProps> = React.memo(({
       
       <View style={styles.centerSection}>
         <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-        {subtitle ? (
-          <Text style={[styles.subtitleText, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
+        {typeof subtitle === 'string' ? (
+          <Text style={[styles.subtitleText, { color: colors.textSecondary }]} numberOfLines={2}>{subtitle}</Text>
+        ) : subtitle ? (
+          subtitle
         ) : null}
       </View>
       

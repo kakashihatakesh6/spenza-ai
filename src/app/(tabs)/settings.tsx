@@ -10,6 +10,7 @@ import {
   Switch,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { useExpenseStore } from '../../store/expenseStore';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useCurrencyStore } from '../../store/currencyStore';
 import { exportService } from '../../services/exportService';
 import { notificationService } from '../../services/notificationService';
 import { expenseHelpers } from '../../utils/expenseHelpers';
@@ -43,6 +45,7 @@ export default function SettingsScreen() {
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(false);
   const [exportFilename, setExportFilename] = useState('');
   const [showTestCenter, setShowTestCenter] = useState(false);
 
@@ -75,7 +78,11 @@ export default function SettingsScreen() {
   }, []);
 
   const selectCurrency = useCallback(() => {
+    setIsCurrencyLoading(true);
     setCurrencyModalVisible(true);
+    useCurrencyStore.getState().fetchRates().finally(() => {
+      setTimeout(() => setIsCurrencyLoading(false), 250);
+    });
   }, []);
 
   const triggerCSVExportFlow = useCallback(() => {
@@ -464,44 +471,53 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={true}>
-            {searchCurrencies(currencySearchQuery).map((c) => {
-              const isSelected = settings.currency === c.code;
-              return (
-                <TouchableOpacity
-                  key={c.code}
-                  onPress={() => {
-                    setCurrency(c.code as any);
-                    setCurrencyModalVisible(false);
-                    setCurrencySearchQuery('');
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
-                    marginBottom: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: isSelected ? '#FFF' : colors.text }}>{c.code}</Text>
+          {isCurrencyLoading ? (
+            <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+                Syncing Live Exchange Rates...
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={true}>
+              {searchCurrencies(currencySearchQuery).map((c) => {
+                const isSelected = settings.currency === c.code;
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    onPress={() => {
+                      setCurrency(c.code as any);
+                      setCurrencyModalVisible(false);
+                      setCurrencySearchQuery('');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
+                      marginBottom: 6,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: isSelected ? '#FFF' : colors.text }}>{c.code}</Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: colors.text }}>{c.name}</Text>
+                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>Symbol: {c.symbol}</Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: colors.text }}>{c.name}</Text>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>Symbol: {c.symbol}</Text>
-                    </View>
-                  </View>
-                  {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -540,38 +556,42 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* Income & Base Currency */}
+        {/* Income */}
         <SectionHeader title="Income" />
         <SettingsCard>
           <SettingsRow
             icon="wallet-outline"
             iconBg="#E0F2FE"
             iconColor="#0EA5E9"
-            title="Income & Base Currency"
-            subtitle={`Monthly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.monthly_income || 50000).toLocaleString()} • Yearly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.yearly_income || 600000).toLocaleString()}`}
-            onPress={selectCurrency}
-            rightElement={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View
-                  style={{
-                    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EFF6FF',
-                    borderColor: colors.primary,
-                    borderWidth: 1,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 10,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>
-                    {settings.currency} ({expenseHelpers.getCurrencySymbol(settings.currency)})
-                  </Text>
-                  <Ionicons name="chevron-down" size={14} color={colors.primary} />
+            title="Income"
+            subtitle={
+              <View style={{ marginTop: 2 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '500' }}>
+                  Monthly: {expenseHelpers.getCurrencySymbol(settings.currency)}{(user?.user_metadata?.monthly_income || 50000).toLocaleString()} • Yearly: {expenseHelpers.getCurrencySymbol(settings.currency)}{(user?.user_metadata?.yearly_income || 600000).toLocaleString()}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                  <View
+                    style={{
+                      backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EFF6FF',
+                      borderColor: colors.primary,
+                      borderWidth: 1,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Ionicons name="globe-outline" size={12} color={colors.primary} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
+                      Base Currency: {settings.currency} ({expenseHelpers.getCurrencySymbol(settings.currency)})
+                    </Text>
+                  </View>
                 </View>
               </View>
             }
+            onPress={selectCurrency}
           />
         </SettingsCard>
 

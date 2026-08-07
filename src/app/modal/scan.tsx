@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -150,7 +149,16 @@ export default function OCRScanModal() {
   const [calendarDate, setCalendarDate] = useState('');
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const [isCurrencyLoading, setIsCurrencyLoading] = useState(false);
   const [isYearPickerView, setIsYearPickerView] = useState(false);
+
+  const openCurrencyModal = useCallback(() => {
+    setIsCurrencyLoading(true);
+    setShowCurrencyModal(true);
+    useCurrencyStore.getState().fetchRates().finally(() => {
+      setTimeout(() => setIsCurrencyLoading(false), 250);
+    });
+  }, []);
 
   const convert = useCurrencyStore((state) => state.convert);
 
@@ -719,7 +727,7 @@ export default function OCRScanModal() {
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity
-                      onPress={() => setShowCurrencyModal(true)}
+                      onPress={openCurrencyModal}
                       style={[
                         styles.currBadgePill,
                         {
@@ -1191,48 +1199,57 @@ export default function OCRScanModal() {
             </View>
 
             {/* Currency List */}
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={true}>
-              {searchCurrencies(currencySearchQuery).map((c) => {
-                const isSelected = currency === c.code;
-                return (
-                  <TouchableOpacity
-                    key={c.code}
-                    onPress={() => {
-                      setCurrency(c.code);
-                      setShowCurrencyModal(false);
-                      setCurrencySearchQuery('');
-                    }}
-                    style={[
-                      styles.currencyRowItem,
-                      {
-                        backgroundColor: isSelected
-                          ? colors.primary + '15'
-                          : 'transparent',
-                        borderColor: isSelected ? colors.primary : colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={[styles.currencyCodeBadge, { backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }]}>
-                        <Text style={[styles.currencyCodeBadgeText, { color: isSelected ? '#FFF' : colors.text }]}>
-                          {c.code}
-                        </Text>
+            {isCurrencyLoading ? (
+              <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+                  Syncing Live Exchange Rates...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={true}>
+                {searchCurrencies(currencySearchQuery).map((c) => {
+                  const isSelected = currency === c.code;
+                  return (
+                    <TouchableOpacity
+                      key={c.code}
+                      onPress={() => {
+                        setCurrency(c.code);
+                        setShowCurrencyModal(false);
+                        setCurrencySearchQuery('');
+                      }}
+                      style={[
+                        styles.currencyRowItem,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primary + '15'
+                            : 'transparent',
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.currencyCodeBadge, { backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }]}>
+                          <Text style={[styles.currencyCodeBadgeText, { color: isSelected ? '#FFF' : colors.text }]}>
+                            {c.code}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={[styles.currencyNameText, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
+                            {c.name}
+                          </Text>
+                          <Text style={[styles.currencySymbolText, { color: colors.textSecondary }]}>
+                            Symbol: {c.symbol}
+                          </Text>
+                        </View>
                       </View>
-                      <View>
-                        <Text style={[styles.currencyNameText, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
-                          {c.name}
-                        </Text>
-                        <Text style={[styles.currencySymbolText, { color: colors.textSecondary }]}>
-                          Symbol: {c.symbol}
-                        </Text>
-                      </View>
-                    </View>
 
-                    {isSelected && <Check size={16} color={colors.primary} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                      {isSelected && <Check size={16} color={colors.primary} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
