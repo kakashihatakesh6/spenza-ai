@@ -40,11 +40,17 @@ export default function EditProfileScreen() {
 
   const initialUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || '';
   const initialAvatar = user?.user_metadata?.custom_avatar_url || user?.user_metadata?.avatar_url || '';
+  const initialMonthly = user?.user_metadata?.monthly_income ? String(user.user_metadata.monthly_income) : '50000';
+  const initialYearly = user?.user_metadata?.yearly_income ? String(user.user_metadata.yearly_income) : String(Number(initialMonthly) * 12);
+  const initialCurrency = user?.user_metadata?.preferred_currency || 'INR';
 
   const [username, setUsername] = useState(initialUsername);
   const [email, setEmail] = useState(user?.email || '');
   const [bio, setBio] = useState(user?.user_metadata?.bio || 'Smart Spender 🚀');
   const [avatarUrl, setAvatarUrl] = useState(initialAvatar);
+  const [monthlyIncome, setMonthlyIncome] = useState(initialMonthly);
+  const [yearlyIncome, setYearlyIncome] = useState(initialYearly);
+  const [preferredCurrency, setPreferredCurrency] = useState(initialCurrency);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
@@ -54,6 +60,14 @@ export default function EditProfileScreen() {
       headerShown: false,
     });
   }, [navigation]);
+
+  const handleMonthlyIncomeChange = (val: string) => {
+    setMonthlyIncome(val);
+    const num = Number(val);
+    if (!isNaN(num) && num >= 0) {
+      setYearlyIncome(String(num * 12));
+    }
+  };
 
   const requestPermissionAndPickImage = async () => {
     try {
@@ -115,10 +129,23 @@ export default function EditProfileScreen() {
         }
       }
 
-      await updateProfile(username.trim(), finalAvatarUrl);
+      const parsedMonthly = parseFloat(monthlyIncome) || 0;
+      const parsedYearly = parseFloat(yearlyIncome) || 0;
+
+      await updateProfile(username.trim(), finalAvatarUrl, {
+        bio,
+        monthly_income: parsedMonthly,
+        yearly_income: parsedYearly,
+        preferred_currency: preferredCurrency,
+      });
+
+      // Synchronize preferred base currency with settings store
+      const { useSettingsStore } = await import('../../store/settingsStore');
+      useSettingsStore.getState().setCurrency(preferredCurrency as any);
+
       setIsSaving(false);
       isSavingRef.current = false;
-      useAlertStore.getState().showAlert('Success', 'Profile updated successfully!', 'success', [
+      useAlertStore.getState().showAlert('Success', 'Profile details updated successfully!', 'success', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (err) {
@@ -253,6 +280,81 @@ export default function EditProfileScreen() {
               multiline
               numberOfLines={3}
             />
+          </View>
+
+          {/* Income & Preferred Currency Section */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Preferred Base Currency</Text>
+            <View style={styles.currencyPillGrid}>
+              {[
+                { code: 'INR', symbol: '₹', label: 'INR (₹)' },
+                { code: 'USD', symbol: '$', label: 'USD ($)' },
+                { code: 'EUR', symbol: '€', label: 'EUR (€)' },
+                { code: 'GBP', symbol: '£', label: 'GBP (£)' },
+                { code: 'CAD', symbol: '$', label: 'CAD ($)' },
+                { code: 'AUD', symbol: '$', label: 'AUD ($)' },
+              ].map((item) => {
+                const isSelected = preferredCurrency === item.code;
+                return (
+                  <TouchableOpacity
+                    key={item.code}
+                    onPress={() => setPreferredCurrency(item.code)}
+                    style={[
+                      styles.currencyPill,
+                      {
+                        backgroundColor: isSelected ? colors.primary : (isDark ? '#1E293B' : '#F3F4F6'),
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.currencyPillText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.inputRow}>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Monthly Income</Text>
+              <TextInput
+                value={monthlyIncome}
+                onChangeText={handleMonthlyIncomeChange}
+                placeholder="50000"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Yearly Income</Text>
+              <TextInput
+                value={yearlyIncome}
+                onChangeText={setYearlyIncome}
+                placeholder="600000"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              />
+            </View>
           </View>
         </View>
 
@@ -407,6 +509,25 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     gap: 8,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  currencyPillGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  currencyPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  currencyPillText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   label: {
     fontSize: 11,

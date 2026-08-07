@@ -75,8 +75,10 @@ export const TransactionsScreen = () => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
+  const [dateRange, setDateRange] = useState<'all' | 'july_12_18' | 'this_month' | 'last_30'>('all');
   const [showSortOptions, setShowSortOptions] = useState(false);
-  const [showCategoryPills, setShowCategoryPills] = useState(false);
+  const [showCategoryPills, setShowCategoryPills] = useState(true);
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Expense | null>(null);
 
   useEffect(() => {
@@ -123,8 +125,6 @@ export const TransactionsScreen = () => {
     return expenseHelpers.getCurrencySymbol(settings.currency);
   }, [settings.currency]);
 
-
-
   const filteredAndSortedExpenses = useMemo(() => {
     return expenses
       .filter((item) => {
@@ -135,7 +135,22 @@ export const TransactionsScreen = () => {
         
         const matchCategory = selectedCategory ? item.category === selectedCategory : true;
         
-        return matchSearch && matchCategory;
+        const matchDateRange = (() => {
+          if (dateRange === 'july_12_18') {
+            return item.date >= '2026-07-12' && item.date <= '2026-07-18';
+          }
+          if (dateRange === 'this_month') {
+            const monthPrefix = new Date().toISOString().slice(0, 7);
+            return item.date.startsWith(monthPrefix);
+          }
+          if (dateRange === 'last_30') {
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            return item.date >= thirtyDaysAgo;
+          }
+          return true;
+        })();
+
+        return matchSearch && matchCategory && matchDateRange;
       })
       .sort((a, b) => {
         if (sortBy === 'date-desc') {
@@ -152,7 +167,7 @@ export const TransactionsScreen = () => {
         }
         return 0;
       });
-  }, [expenses, search, selectedCategory, sortBy]);
+  }, [expenses, search, selectedCategory, sortBy, dateRange]);
 
   const handleDelete = useCallback((id: string, merchant: string) => {
     const targetExpense = expenses.find(e => e.id === id);
@@ -205,14 +220,20 @@ export const TransactionsScreen = () => {
   const toggleSortOptions = useCallback(() => {
     setShowSortOptions(prev => !prev);
     setShowCategoryPills(false);
+    setShowDateRangePicker(false);
   }, []);
 
   const toggleCategoryPills = useCallback(() => {
     setShowCategoryPills(prev => !prev);
-    setShowSortOptions(prev => false);
+    setShowSortOptions(false);
+    setShowDateRangePicker(false);
   }, []);
 
-
+  const toggleDateRangePicker = useCallback(() => {
+    setShowDateRangePicker(prev => !prev);
+    setShowCategoryPills(false);
+    setShowSortOptions(false);
+  }, []);
 
   const renderCategoryDropdown = () => {
     if (!showCategoryPills) return null;
@@ -222,7 +243,10 @@ export const TransactionsScreen = () => {
         exiting={FadeOut.duration(180)}
         style={[
           styles.dropdownContainer, 
-          { backgroundColor: colors.card, borderBottomColor: colors.border }
+          { 
+            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
+          }
         ]}
       >
         <FlatList
@@ -235,7 +259,7 @@ export const TransactionsScreen = () => {
             const isSelected = item.name === 'All' ? selectedCategory === null : selectedCategory === item.name;
             const styleInfo = getCategoryStyle(item.name);
             const displayColor = isDark ? '#818CF8' : styleInfo.color;
-            const displayBg = isDark ? '#1E293B' : styleInfo.bg;
+            const displayBg = isDark ? 'rgba(30, 41, 59, 0.6)' : styleInfo.bg;
 
             return (
               <Animated.View entering={FadeIn.duration(200).delay(index * 25)}>
@@ -243,8 +267,8 @@ export const TransactionsScreen = () => {
                   style={[
                     styles.categoryCard,
                     {
-                      backgroundColor: isSelected ? colors.primary : colors.card,
-                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary : (isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.9)'),
+                      borderColor: isSelected ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'),
                       shadowColor: isSelected ? colors.primary : '#000',
                       shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: isSelected ? 0.2 : 0,
@@ -284,6 +308,80 @@ export const TransactionsScreen = () => {
     );
   };
 
+  const renderDateRangeDropdown = () => {
+    if (!showDateRangePicker) return null;
+    const ranges: { label: string; value: 'all' | 'july_12_18' | 'this_month' | 'last_30'; badge?: string }[] = [
+      { label: 'All Dates', value: 'all' },
+      { label: '12 July - 18 July', value: 'july_12_18', badge: 'PRESET' },
+      { label: 'This Month', value: 'this_month' },
+      { label: 'Last 30 Days', value: 'last_30' },
+    ];
+
+    return (
+      <Animated.View 
+        entering={FadeInDown.duration(220)}
+        exiting={FadeOut.duration(180)}
+        style={[
+          styles.dropdownContainer, 
+          { 
+            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
+          }
+        ]}
+      >
+        <View style={styles.sortOptionsGrid}>
+          {ranges.map((opt, index) => {
+            const isSelected = dateRange === opt.value;
+            return (
+              <Animated.View key={opt.value} entering={FadeIn.duration(200).delay(index * 25)}>
+                <TouchableOpacity
+                  style={[
+                    styles.sortOptItem,
+                    { 
+                      backgroundColor: isSelected ? colors.primary : (isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.9)'),
+                      borderColor: isSelected ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'),
+                      borderWidth: 1,
+                      shadowColor: isSelected ? colors.primary : '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: isSelected ? 0.15 : 0,
+                      shadowRadius: 3,
+                      elevation: isSelected ? 2 : 0,
+                    }
+                  ]}
+                  onPress={() => {
+                    setDateRange(opt.value);
+                    setShowDateRangePicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={14} 
+                    color={isSelected ? '#FFFFFF' : colors.textSecondary} 
+                    style={{ marginRight: 6 }} 
+                  />
+                  <Text
+                    style={[
+                      styles.sortOptText,
+                      { color: isSelected ? '#FFFFFF' : colors.text },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {opt.badge && (
+                    <View style={[styles.presetTag, { backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : colors.primaryLight }]}>
+                      <Text style={[styles.presetTagText, { color: isSelected ? '#FFFFFF' : colors.primary }]}>{opt.badge}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
+        </View>
+      </Animated.View>
+    );
+  };
+
   const renderSortDropdown = () => {
     if (!showSortOptions) return null;
     return (
@@ -292,7 +390,10 @@ export const TransactionsScreen = () => {
         exiting={FadeOut.duration(180)}
         style={[
           styles.dropdownContainer, 
-          { backgroundColor: colors.card, borderBottomColor: colors.border }
+          { 
+            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
+          }
         ]}
       >
         <View style={styles.sortOptionsGrid}>
@@ -309,8 +410,8 @@ export const TransactionsScreen = () => {
                   style={[
                     styles.sortOptItem,
                     { 
-                      backgroundColor: isSelected ? colors.primary : (isDark ? '#1E293B' : '#F5F5F7'),
-                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary : (isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.9)'),
+                      borderColor: isSelected ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'),
                       borderWidth: 1,
                       shadowColor: isSelected ? colors.primary : '#000',
                       shadowOffset: { width: 0, height: 2 },
@@ -370,13 +471,11 @@ export const TransactionsScreen = () => {
           title="TRANSACTIONS"
           showBackButton={true}
           onBackPress={() => router.back()}
-          rightIcon="sliders"
-          onRightPress={toggleSortOptions}
         />
 
         <Animated.View entering={SlideInUp.duration(400)} style={styles.searchFilterRow}>
           {/* Unified search input in the row */}
-          <View style={[styles.searchContainer, { backgroundColor: isDark ? '#1E293B' : '#F5F5F7' }]}>
+          <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)', borderWidth: 1 }]}>
             <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
@@ -395,14 +494,38 @@ export const TransactionsScreen = () => {
             )}
           </View>
 
-          {/* Category Trigger Button with dynamic style */}
+          {/* Date Range Trigger Button */}
           <TouchableOpacity
             style={[
               styles.iconFilterBtn,
               { 
-                backgroundColor: selectedCategory ? colors.primaryLight : (isDark ? '#1E293B' : '#F5F5F7'),
-                borderColor: selectedCategory ? colors.primary : 'transparent',
-                borderWidth: selectedCategory ? 1 : 0
+                backgroundColor: dateRange !== 'all' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                borderColor: dateRange !== 'all' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                borderWidth: 1
+              }
+            ]}
+            onPress={toggleDateRangePicker}
+            activeOpacity={0.7}
+            accessibilityLabel="Filter by date range trigger"
+          >
+            <Ionicons 
+              name="calendar" 
+              size={18} 
+              color={dateRange !== 'all' ? colors.primary : colors.textSecondary} 
+            />
+            {dateRange !== 'all' && (
+              <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
+            )}
+          </TouchableOpacity>
+
+          {/* Category Trigger Button */}
+          <TouchableOpacity
+            style={[
+              styles.iconFilterBtn,
+              { 
+                backgroundColor: selectedCategory ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                borderColor: selectedCategory ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                borderWidth: 1
               }
             ]}
             onPress={toggleCategoryPills}
@@ -424,9 +547,9 @@ export const TransactionsScreen = () => {
             style={[
               styles.iconFilterBtn,
               { 
-                backgroundColor: sortBy !== 'date-desc' ? colors.primaryLight : (isDark ? '#1E293B' : '#F5F5F7'),
-                borderColor: sortBy !== 'date-desc' ? colors.primary : 'transparent',
-                borderWidth: sortBy !== 'date-desc' ? 1 : 0
+                backgroundColor: sortBy !== 'date-desc' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                borderColor: sortBy !== 'date-desc' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                borderWidth: 1
               }
             ]}
             onPress={toggleSortOptions}
@@ -444,6 +567,7 @@ export const TransactionsScreen = () => {
           </TouchableOpacity>
         </Animated.View>
 
+        {renderDateRangeDropdown()}
         {renderSortDropdown()}
         {renderCategoryDropdown()}
 
@@ -611,6 +735,17 @@ const styles = StyleSheet.create({
   sortOptText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  presetTag: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  presetTagText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   listContainer: {
     flex: 1,

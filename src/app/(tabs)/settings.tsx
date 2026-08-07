@@ -38,6 +38,7 @@ export default function SettingsScreen() {
 
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [showTestCenter, setShowTestCenter] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -88,10 +89,10 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      const path = await exportService.exportToCSV(expenses);
-      useAlertStore.getState().showAlert('Export Successful', `Expenses CSV file successfully created and saved to:\n\n${path}`, 'success');
+      const path = await exportService.saveCSVToCustomLocation(expenses);
+      useAlertStore.getState().showAlert('Export Ready', `CSV report generated successfully!\n\nLocation:\n${path}`, 'success');
     } catch (e) {
-      useAlertStore.getState().showAlert('Export Failed', 'An error occurred during CSV creation.', 'error');
+      useAlertStore.getState().showAlert('Export Failed', 'An error occurred while preparing the CSV file.', 'error');
     }
   }, [expenses]);
 
@@ -377,10 +378,6 @@ export default function SettingsScreen() {
         title="SETTINGS"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="check"
-        onRightPress={() => {
-          useAlertStore.getState().showAlert('Success', 'Settings saved successfully!', 'success');
-        }}
       />
       
       <ScrollView
@@ -596,48 +593,63 @@ export default function SettingsScreen() {
 
               {/* Notification Testing Center */}
               <View style={styles.nestedRowBlock}>
-                <Text style={nestedTitleStyle}>Notification Testing Center</Text>
-                <Text style={[helpTextStyle, { marginBottom: 12 }]}>
-                  Test how spending alerts will render natively on your device.
-                </Text>
-                
-                <View style={styles.testList}>
-                  <TouchableOpacity 
-                    onPress={handleTestDailyReminder} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.primaryLight }]}>
-                      <Ionicons name="notifications" size={16} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Mock Daily Reminder</Text>
-                    <Text style={[styles.testListBadge, { color: colors.primary, backgroundColor: colors.primaryLight }]}>Test</Text>
-                  </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setShowTestCenter(!showTestCenter)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={nestedTitleStyle}>Notification Testing Center</Text>
+                    <Text style={helpTextStyle}>
+                      {showTestCenter ? 'Tap to hide mock notification triggers.' : 'Tap to expand mock notification testing controls.'}
+                    </Text>
+                  </View>
+                  <Ionicons 
+                    name={showTestCenter ? "chevron-up" : "chevron-down"} 
+                    size={18} 
+                    color={colors.primary} 
+                  />
+                </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    onPress={handleTestWarning} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.warning + '20' }]}>
-                      <Ionicons name="alert-circle" size={16} color={colors.warning} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Warning ({settings.budgetWarningThreshold || 80}%)</Text>
-                    <Text style={[styles.testListBadge, { color: colors.warning, backgroundColor: colors.warning + '20' }]}>Test</Text>
-                  </TouchableOpacity>
+                {showTestCenter && (
+                  <View style={[styles.testList, { marginTop: 12 }]}>
+                    <TouchableOpacity 
+                      onPress={handleTestDailyReminder} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.primaryLight }]}>
+                        <Ionicons name="notifications" size={16} color={colors.primary} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Mock Daily Reminder</Text>
+                      <Text style={[styles.testListBadge, { color: colors.primary, backgroundColor: colors.primaryLight }]}>Test</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    onPress={handleTestExceeded} 
-                    style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.testIconBg, { backgroundColor: colors.danger + '20' }]}>
-                      <Ionicons name="alert" size={16} color={colors.danger} />
-                    </View>
-                    <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Exceeded Alert</Text>
-                    <Text style={[styles.testListBadge, { color: colors.danger, backgroundColor: colors.danger + '20' }]}>Test</Text>
-                  </TouchableOpacity>
-                </View>
+                    <TouchableOpacity 
+                      onPress={handleTestWarning} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.warning + '20' }]}>
+                        <Ionicons name="alert-circle" size={16} color={colors.warning} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Warning ({settings.budgetWarningThreshold || 80}%)</Text>
+                      <Text style={[styles.testListBadge, { color: colors.warning, backgroundColor: colors.warning + '20' }]}>Test</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      onPress={handleTestExceeded} 
+                      style={[styles.testListItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.testIconBg, { backgroundColor: colors.danger + '20' }]}>
+                        <Ionicons name="alert" size={16} color={colors.danger} />
+                      </View>
+                      <Text style={[styles.testListText, { color: colors.text }]}>Send Budget Exceeded Alert</Text>
+                      <Text style={[styles.testListBadge, { color: colors.danger, backgroundColor: colors.danger + '20' }]}>Test</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </>
           )}

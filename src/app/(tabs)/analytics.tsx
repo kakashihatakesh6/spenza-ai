@@ -270,10 +270,6 @@ export default function AnalyticsScreen() {
         title="ANALYTICS"
         showBackButton={true}
         onBackPress={() => router.back()}
-        rightIcon="download"
-        onRightPress={() => {
-          useAlertStore.getState().showAlert('Export Report', 'Your PDF & CSV reports are being prepared for download.', 'info');
-        }}
       />
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
         {isLoading ? (

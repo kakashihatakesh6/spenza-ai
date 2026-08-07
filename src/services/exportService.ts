@@ -1,4 +1,6 @@
-import { documentDirectory, writeAsStringAsync, readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
+import { documentDirectory, writeAsStringAsync, readAsStringAsync, EncodingType, StorageAccessFramework } from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import { Expense } from '../types';
 import { logger } from './logger';
 
@@ -46,6 +48,44 @@ export const exportService = {
     await writeAsStringAsync(filePath, csvContent, {
       encoding: EncodingType.UTF8,
     });
+
+    return filePath;
+  },
+
+  /**
+   * Saves CSV file to any user-chosen path on device via Storage Access Framework or native Share Sheet.
+   */
+  async saveCSVToCustomLocation(expenses: Expense[]): Promise<string> {
+    const filePath = await this.exportToCSV(expenses);
+
+    // Try Android StorageAccessFramework for folder picking
+    if (Platform.OS === 'android' && StorageAccessFramework) {
+      try {
+        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const fileName = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
+          const csvContent = await readAsStringAsync(filePath, { encoding: EncodingType.UTF8 });
+          const createdUri = await StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'text/csv'
+          );
+          await writeAsStringAsync(createdUri, csvContent, { encoding: EncodingType.UTF8 });
+          return createdUri;
+        }
+      } catch (err) {
+        logger.warn('StorageAccessFramework custom path selection fallback to share sheet', err);
+      }
+    }
+
+    // Fallback/iOS: Native system share & file save dialog sheet
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(filePath, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Save CSV Expense Report',
+        UTI: 'public.comma-separated-values-text',
+      });
+    }
 
     return filePath;
   },
