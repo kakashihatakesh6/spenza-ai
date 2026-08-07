@@ -23,6 +23,8 @@ import { notificationService } from '../../services/notificationService';
 import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Header } from '../../components/Header';
 
+import { ALL_CURRENCIES, searchCurrencies } from '../../constants/currencies';
+
 // Redesigned components
 import { SettingsCard } from '../../components/settings/SettingsCard';
 import { SettingsRow } from '../../components/settings/SettingsRow';
@@ -39,6 +41,8 @@ export default function SettingsScreen() {
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
   const [exportFilename, setExportFilename] = useState('');
   const [showTestCenter, setShowTestCenter] = useState(false);
 
@@ -71,19 +75,8 @@ export default function SettingsScreen() {
   }, []);
 
   const selectCurrency = useCallback(() => {
-    useAlertStore.getState().showAlert(
-      'Select Currency',
-      'Choose your preferred base currency symbol:',
-      'info',
-      [
-        { text: 'USD ($)', onPress: () => setCurrency('USD') },
-        { text: 'INR (₹)', onPress: () => setCurrency('INR') },
-        { text: 'EUR (€)', onPress: () => setCurrency('EUR') },
-        { text: 'GBP (£)', onPress: () => setCurrency('GBP') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  }, [setCurrency]);
+    setCurrencyModalVisible(true);
+  }, []);
 
   const triggerCSVExportFlow = useCallback(() => {
     if (expenses.length === 0) {
@@ -430,6 +423,90 @@ export default function SettingsScreen() {
     </Modal>
   );
 
+  const renderCurrencyModal = () => (
+    <Modal
+      visible={currencyModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setCurrencyModalVisible(false)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+        activeOpacity={1}
+        onPress={() => setCurrencyModalVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ width: '100%', maxWidth: 360, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.border }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Select Base Currency</Text>
+            <TouchableOpacity onPress={() => setCurrencyModalVisible(false)}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Box */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, height: 42, paddingHorizontal: 12, marginBottom: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC' }}>
+            <Ionicons name="search-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.text }}
+              value={currencySearchQuery}
+              onChangeText={setCurrencySearchQuery}
+              placeholder="Search code or name..."
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+            />
+            {currencySearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setCurrencySearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={true}>
+            {searchCurrencies(currencySearchQuery).map((c) => {
+              const isSelected = settings.currency === c.code;
+              return (
+                <TouchableOpacity
+                  key={c.code}
+                  onPress={() => {
+                    setCurrency(c.code as any);
+                    setCurrencyModalVisible(false);
+                    setCurrencySearchQuery('');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
+                    marginBottom: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: isSelected ? colors.primary : (isDark ? '#0F172A' : '#E2E8F0') }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: isSelected ? '#FFF' : colors.text }}>{c.code}</Text>
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: colors.text }}>{c.name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>Symbol: {c.symbol}</Text>
+                    </View>
+                  </View>
+                  {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const clockColonStyle = [styles.clockColon, { color: colors.textSecondary }];
 
   return (
@@ -440,6 +517,8 @@ export default function SettingsScreen() {
         onBackPress={() => router.back()}
       />
       
+      {renderCurrencyModal()}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -461,25 +540,16 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* Payment Methods */}
-        <SectionHeader title="Payment Methods" />
+        {/* Main Balance & Base Currency */}
+        <SectionHeader title="Main Balance & Currency" />
         <SettingsCard>
           <SettingsRow
             icon="card-outline"
             iconBg="#E0F2FE"
             iconColor="#0EA5E9"
             title="Main Balance"
-            subtitle={`Base Currency: ${settings.currency}`}
+            subtitle={`Monthly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.monthly_income || 50000).toLocaleString()} • Yearly: ${expenseHelpers.getCurrencySymbol(settings.currency)}${(user?.user_metadata?.yearly_income || 600000).toLocaleString()}`}
             onPress={selectCurrency}
-          />
-          <View style={dividerStyle} />
-          <SettingsRow
-            icon="cloud-done-outline"
-            iconBg="#F0FDF4"
-            iconColor="#16A34A"
-            title="Connected Banks"
-            subtitle={user ? 'Synced with Supabase Cloud' : 'Offline Cache Database'}
-            onPress={() => useAlertStore.getState().showAlert('Bank Integration', 'Open banking links are coming soon!', 'info')}
           />
         </SettingsCard>
 
