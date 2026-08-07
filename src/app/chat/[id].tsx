@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../hooks/useTheme';
 import { useChatStore } from '../../store/chatStore';
+import { useAlertStore } from '../../store/alertStore';
 import { Header } from '../../components/Header';
 import { BotAvatar } from '../../components/BotAvatar';
 import {
@@ -80,7 +81,17 @@ export default function ChatSessionScreen() {
     try {
       await sendMessage(query);
     } catch (err: any) {
-      Alert.alert('Send Failed', err.message || 'An error occurred.');
+      const rawMsg = err?.message || 'An error occurred while sending message.';
+      const lower = rawMsg.toLowerCase();
+      let alertTitle = 'Send Failed';
+      if (lower.includes('daily token') || lower.includes('token limit')) {
+        alertTitle = 'Daily Token Limit Over';
+      } else if (lower.includes('rate limit')) {
+        alertTitle = 'Rate Limit Exceeded';
+      } else if (lower.includes('offline') || lower.includes('network')) {
+        alertTitle = 'Connection Error';
+      }
+      useAlertStore.getState().showAlert(alertTitle, rawMsg, 'warning');
       setInputVal(query); // restore input
     } finally {
       setSending(false);

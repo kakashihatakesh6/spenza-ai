@@ -4,6 +4,7 @@ import { networkMonitor } from '../services/logger/networkMonitor';
 import { logger } from '../services/logger';
 import { useAuthStore } from './authStore';
 import { useExpenseStore } from './expenseStore';
+import { useAlertStore } from './alertStore';
 
 interface ChatState {
   conversations: Conversation[];
@@ -227,8 +228,40 @@ export const useChatStore = create<ChatState>((set, get) => {
           }
         },
         (error) => {
-          logger.error('Store: error during message streaming', error?.message || String(error));
+          const rawMessage = error?.message || String(error);
+          logger.error('Store: error during message streaming', rawMessage);
           
+          let alertTitle = 'Chat Error';
+          let alertType: 'error' | 'warning' = 'error';
+
+          const lower = rawMessage.toLowerCase();
+          if (lower.includes('daily token') || lower.includes('token limit') || lower.includes('token budget')) {
+            alertTitle = 'Daily Token Limit Over';
+            alertType = 'warning';
+          } else if (lower.includes('rate limit')) {
+            alertTitle = 'Rate Limit Exceeded';
+            alertType = 'warning';
+          } else if (lower.includes('server busy') || lower.includes('overloaded') || lower.includes('503')) {
+            alertTitle = 'Server Busy';
+            alertType = 'warning';
+          } else if (lower.includes('offline') || lower.includes('network')) {
+            alertTitle = 'Connection Error';
+            alertType = 'error';
+          }
+
+          // Trigger high-grade Custom Alert Modal
+          useAlertStore.getState().showAlert(
+            alertTitle,
+            rawMessage,
+            alertType,
+            [
+              {
+                text: 'Got It',
+                style: 'default',
+              },
+            ]
+          );
+
           // Remove user message from list if sending failed completely
           set((state) => {
             const listWithoutTemp = state.messages.filter((m) => !m.id.startsWith('temp-user'));
