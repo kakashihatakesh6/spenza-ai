@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import { sessionService, SessionItem } from './session.service';
 
 // Allow OAuth redirects to be completed
 WebBrowser.maybeCompleteAuthSession();
@@ -201,4 +202,18 @@ export const authService = {
   async getCurrentUser() {
     return this.getUser();
   },
+
+  // Session Management
+  async getActiveSessions() {
+    return sessionService.getActiveSessions();
+  },
+
+  async signOutOthers() {
+    return sessionService.terminateOtherSessions();
+  },
+
+  async terminateSession(sessionId: string) {
+    return sessionService.terminateSession(sessionId);
+  },
 };
+
