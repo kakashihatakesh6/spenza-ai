@@ -34,13 +34,16 @@ export default function AuthCallback() {
           throw new Error((error_description as string) || (error as string));
         }
 
+        const isRecovery = queryParams?.type === 'recovery' || params?.type === 'recovery' || formattedUrl.includes('reset-password');
+        const targetRoute = isRecovery ? '/auth/reset-password' : '/(tabs)';
+
         if (code) {
           setStatusMessage('Exchanging authorization code...');
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code as string);
           if (exchangeError) throw exchangeError;
           
           if (active) {
-            router.replace('/(tabs)');
+            router.replace(targetRoute as any);
           }
           return;
         }
@@ -54,7 +57,7 @@ export default function AuthCallback() {
           if (sessionError) throw sessionError;
           
           if (active) {
-            router.replace('/(tabs)');
+            router.replace(targetRoute as any);
           }
           return;
         }
@@ -69,7 +72,7 @@ export default function AuthCallback() {
           setStatusMessage('Exchanging code...');
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(routerCode as string);
           if (exchangeError) throw exchangeError;
-          if (active) router.replace('/(tabs)');
+          if (active) router.replace(targetRoute as any);
           return;
         }
 
@@ -80,7 +83,7 @@ export default function AuthCallback() {
             refresh_token: routerRefreshToken as string,
           });
           if (sessionError) throw sessionError;
-          if (active) router.replace('/(tabs)');
+          if (active) router.replace(targetRoute as any);
           return;
         }
 

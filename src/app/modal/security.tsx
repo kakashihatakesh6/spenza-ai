@@ -14,6 +14,9 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useAuthStore } from '../../store/authStore';
+import { authService } from '../../services/auth.service';
+import { supabase } from '../../lib/supabase';
 import { Header } from '../../components/Header';
 import { logger } from '../../services/logger';
 import {
@@ -24,6 +27,9 @@ import {
   Trash2,
   Lock,
   CheckCircle,
+  Eye,
+  EyeOff,
+  Globe as GoogleIcon,
 } from 'lucide-react-native';
 
 interface SessionItem {
@@ -40,14 +46,26 @@ export default function SecurityScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
+  const user = useAuthStore((state) => state.user);
 
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+
+  // Password fields
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  
+
+  // Visibility toggles
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Detect if user logged in via Google OAuth
+  const provider = user?.app_metadata?.provider || (user?.app_metadata?.providers?.[0]);
+  const isGoogleUser = provider === 'google';
+
   const [sessions, setSessions] = useState<SessionItem[]>([
     {
       id: '1',
@@ -85,34 +103,54 @@ export default function SecurityScreen() {
   }, [navigation]);
 
   const handleUpdatePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      useAlertStore.getState().showAlert('Validation Error', 'Please fill out all password fields.', 'warning');
+    // Validation
+    if (!isGoogleUser && !currentPassword) {
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter your current password.', 'warning');
+      return;
+    }
+    if (!newPassword || !confirmPassword) {
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter and confirm your new password.', 'warning');
+      return;
+    }
+    if (newPassword.length < 6) {
+      useAlertStore.getState().showAlert('Validation Error', 'New password must be at least 6 characters.', 'warning');
       return;
     }
     if (newPassword !== confirmPassword) {
       useAlertStore.getState().showAlert('Validation Error', 'New passwords do not match.', 'warning');
       return;
     }
-    if (newPassword.length < 6) {
-      useAlertStore.getState().showAlert('Validation Error', 'Password must be at least 6 characters.', 'warning');
-      return;
-    }
 
     try {
       setIsUpdatingPassword(true);
-      // Simulate API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // For email/password users, verify current password first
+      if (!isGoogleUser && user?.email) {
+        const { error: verifyErr } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        });
+
+        if (verifyErr) {
+          setIsUpdatingPassword(false);
+          useAlertStore.getState().showAlert('Verification Failed', 'Current password entered is incorrect.', 'error');
+          return;
+        }
+      }
+
+      // Update password on Supabase
+      await authService.updatePassword(newPassword);
+
       setIsUpdatingPassword(false);
-      
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      
-      useAlertStore.getState().showAlert('Success', 'Your password has been successfully updated.', 'success');
-    } catch (e) {
+
+      useAlertStore.getState().showAlert('Success', 'Your password has been updated successfully.', 'success');
+    } catch (e: any) {
       setIsUpdatingPassword(false);
       logger.error('Failed to update password', e);
-      useAlertStore.getState().showAlert('Error', 'Failed to update password.', 'error');
+      useAlertStore.getState().showAlert('Update Failed', e?.message || 'Failed to update password. Please try again.', 'error');
     }
   };
 
@@ -207,44 +245,76 @@ export default function SecurityScreen() {
         </View>
 
         {/* Password Reset Block */}
-        <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>Update Password</Text>
+        <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+          {isGoogleUser ? 'Set Account Password' : 'Update Password'}
+        </Text>
         
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.form}>
-            <View style={[styles.inputContainer, { borderColor: colors.border }]}>
-              <Lock size={15} color={colors.textSecondary} style={{ marginRight: 10 }} />
-              <TextInput
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                secureTextEntry
-                placeholder="Current Account Password"
-                placeholderTextColor={colors.textSecondary}
-                style={[styles.input, { color: colors.text }]}
-              />
+          {isGoogleUser && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isDark ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)',
+              padding: 12,
+              borderRadius: 12,
+              marginBottom: 14,
+            }}>
+              <GoogleIcon size={18} color={colors.primary} style={{ marginRight: 10 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: colors.text, lineHeight: 16 }}>
+                Signed in with Google. Set a password to enable direct email & password sign in.
+              </Text>
             </View>
+          )}
 
+          <View style={styles.form}>
+            {/* 1. Current Password field (ONLY shown if user signed up with email/password) */}
+            {!isGoogleUser && (
+              <View style={[styles.inputContainer, { borderColor: colors.border }]}>
+                <Lock size={15} color={colors.textSecondary} style={{ marginRight: 10 }} />
+                <TextInput
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry={!showCurrentPassword}
+                  placeholder="Current Account Password"
+                  placeholderTextColor={colors.textSecondary}
+                  style={[styles.input, { color: colors.text }]}
+                />
+                <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)} style={{ padding: 4 }}>
+                  {showCurrentPassword ? <EyeOff size={16} color={colors.textSecondary} /> : <Eye size={16} color={colors.textSecondary} />}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 2. New Password field */}
             <View style={[styles.inputContainer, { borderColor: colors.border }]}>
               <Lock size={15} color={colors.textSecondary} style={{ marginRight: 10 }} />
               <TextInput
                 value={newPassword}
                 onChangeText={setNewPassword}
-                secureTextEntry
+                secureTextEntry={!showNewPassword}
                 placeholder="New Password (min 6 chars)"
                 placeholderTextColor={colors.textSecondary}
                 style={[styles.input, { color: colors.text }]}
               />
+              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={{ padding: 4 }}>
+                {showNewPassword ? <EyeOff size={16} color={colors.textSecondary} /> : <Eye size={16} color={colors.textSecondary} />}
+              </TouchableOpacity>
             </View>
 
+            {/* 3. Confirm New Password field */}
             <View style={[styles.inputContainer, { borderColor: colors.border }]}>
               <Lock size={15} color={colors.textSecondary} style={{ marginRight: 10 }} />
               <TextInput
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry
+                secureTextEntry={!showConfirmPassword}
                 placeholder="Confirm New Password"
                 placeholderTextColor={colors.textSecondary}
                 style={[styles.input, { color: colors.text }]}
               />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
+                {showConfirmPassword ? <EyeOff size={16} color={colors.textSecondary} /> : <Eye size={16} color={colors.textSecondary} />}
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -255,7 +325,9 @@ export default function SecurityScreen() {
               {isUpdatingPassword ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
-                <Text style={styles.actionBtnText}>Update Password</Text>
+                <Text style={styles.actionBtnText}>
+                  {isGoogleUser ? 'Set Password' : 'Update Password'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
