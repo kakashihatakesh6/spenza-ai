@@ -158,6 +158,24 @@ export const sessionService = {
   },
 
   /**
+   * Unregister current device session from active_devices metadata on sign out
+   */
+  async unregisterCurrentDevice(): Promise<void> {
+    try {
+      const deviceId = await this.getDeviceId();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.user_metadata?.active_devices) {
+        const storedDevices = (user.user_metadata.active_devices || []).filter((d: any) => d.id !== deviceId);
+        await supabase.auth.updateUser({
+          data: { active_devices: storedDevices }
+        }).catch(() => {});
+      }
+    } catch (err) {
+      logger.warn('Failed to unregister current device session', err);
+    }
+  },
+
+  /**
    * Fetch all active sessions for the current user from Supabase metadata (Read-Only)
    */
   async getActiveSessions(): Promise<SessionItem[]> {

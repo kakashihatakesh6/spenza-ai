@@ -4,6 +4,7 @@ import {
   Text,
   View,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Alert,
   Platform,
@@ -28,7 +29,7 @@ import { Skeleton } from '../components/Skeleton';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Edit2, Trash2, Plus, Calendar as CalendarIcon, RotateCcw, X, Check, ArrowRight } from 'lucide-react-native';
 import { TransactionDetailModal } from '../components/TransactionDetailModal';
-import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInUp, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInUp, FadeOut, FadeOutUp } from 'react-native-reanimated';
 import { Expense } from '../types';
 
 const CATEGORY_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
@@ -362,8 +363,39 @@ export const TransactionsScreen = () => {
 
   const renderCategoryDropdown = () => {
     if (!showCategoryPills) return null;
+    if (isLoading) {
+      return (
+        <Animated.View
+          entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+          exiting={FadeOutUp.duration(180)}
+          style={styles.dropdownContainer}
+        >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.categoryCard,
+                  {
+                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.9)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+                  },
+                ]}
+              >
+                <Skeleton width={26} height={26} borderRadius={13} style={{ marginRight: 6 }} />
+                <Skeleton width={45 + (idx % 3) * 15} height={14} borderRadius={6} />
+              </View>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      );
+    }
     return (
-      <View style={styles.dropdownContainer}>
+      <Animated.View 
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
+      >
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -419,7 +451,7 @@ export const TransactionsScreen = () => {
             );
           }}
         />
-      </View>
+      </Animated.View>
     );
   };
 
@@ -441,7 +473,11 @@ export const TransactionsScreen = () => {
     ];
 
     return (
-      <View style={styles.dropdownContainer}>
+      <Animated.View 
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
+      >
         <View style={styles.sortOptionsGrid}>
           {ranges.map((opt) => {
             const isSelected = dateRange === opt.value;
@@ -498,14 +534,18 @@ export const TransactionsScreen = () => {
             );
           })}
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
   const renderSortDropdown = () => {
     if (!showSortOptions) return null;
     return (
-      <View style={styles.dropdownContainer}>
+      <Animated.View 
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
+      >
         <View style={styles.sortOptionsGrid}>
           {[
             { label: 'Date: Newest', value: 'date-desc', icon: 'arrow-down' },
@@ -555,7 +595,7 @@ export const TransactionsScreen = () => {
             );
           })}
         </View>
-      </View>
+      </Animated.View>
     );
   };
 

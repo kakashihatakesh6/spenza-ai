@@ -143,9 +143,10 @@ export const authService = {
     }
   },
 
-  // Logout
+  // Logout (Local device only - leaves other devices logged in)
   async signOut() {
-    const { error } = await supabase.auth.signOut();
+    await sessionService.unregisterCurrentDevice().catch(() => {});
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) throw error;
   },
 
