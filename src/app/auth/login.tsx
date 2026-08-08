@@ -96,7 +96,7 @@ export default function LoginScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
+          <View style={[styles.logoContainer, { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'transparent', borderWidth: isDark ? 1 : 0 }]}>
             <Image
               source={require('../../../assets/images/icon.png')}
               style={styles.logo}
@@ -207,13 +207,14 @@ export default function LoginScreen() {
           style={[
             styles.googleBtn, 
             { 
-              borderColor: colors.border, 
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : colors.border, 
+              backgroundColor: isDark ? colors.card : '#FFFFFF',
               shadowColor: isDark ? '#000' : 'rgba(0,0,0,0.05)'
             }
           ]}
           onPress={handleGoogleSignIn}
           disabled={googleLoading}
+          activeOpacity={0.8}
         >
           {googleLoading ? (
             <ActivityIndicator color={colors.primary} />
