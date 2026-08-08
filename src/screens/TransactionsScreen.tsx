@@ -757,7 +757,7 @@ export const TransactionsScreen = () => {
                   style={[styles.searchInput, { color: colors.text }]}
                   value={search}
                   onChangeText={setSearch}
-                  placeholder="Search transactions"
+                  placeholder="Search transaction"
                   placeholderTextColor={colors.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}
