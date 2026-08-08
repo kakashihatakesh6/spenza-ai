@@ -363,15 +363,7 @@ export const TransactionsScreen = () => {
   const renderCategoryDropdown = () => {
     if (!showCategoryPills) return null;
     return (
-      <View 
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
-      >
+      <View style={styles.dropdownContainer}>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -449,15 +441,7 @@ export const TransactionsScreen = () => {
     ];
 
     return (
-      <View 
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
-      >
+      <View style={styles.dropdownContainer}>
         <View style={styles.sortOptionsGrid}>
           {ranges.map((opt) => {
             const isSelected = dateRange === opt.value;
@@ -521,15 +505,7 @@ export const TransactionsScreen = () => {
   const renderSortDropdown = () => {
     if (!showSortOptions) return null;
     return (
-      <View 
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
-      >
+      <View style={styles.dropdownContainer}>
         <View style={styles.sortOptionsGrid}>
           {[
             { label: 'Date: Newest', value: 'date-desc', icon: 'arrow-down' },
@@ -973,9 +949,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   dropdownContainer: {
-    borderBottomWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     zIndex: 10,
+    backgroundColor: 'transparent',
   },
   categoryScroll: {
     paddingHorizontal: 16,
