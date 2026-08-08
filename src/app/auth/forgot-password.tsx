@@ -59,7 +59,7 @@ export default function ForgotPasswordScreen() {
   const doPasswordsMatch = newPassword.length > 0 && confirmNewPassword.length > 0 && newPassword === confirmNewPassword;
   const doPasswordsMismatch = confirmNewPassword.length > 0 && newPassword !== confirmNewPassword;
 
-  // Step 1: Request reset link/OTP
+  // Step 1: Request 6-Digit OTP Code
   const handleRequestOtp = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
@@ -77,12 +77,18 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
       await authService.sendPasswordResetEmail(trimmedEmail);
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setStep('verify');
+      if (step === 'request') {
+        setStep('verify');
+      } else {
+        useAlertStore.getState().showAlert('Code Sent', 'A new 8-digit verification code has been sent to your email.', 'success');
+      }
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      useAlertStore.getState().showAlert('Request Failed', error.message || 'An error occurred. Please try again.', 'error');
+      useAlertStore.getState().showAlert('Request Error', error?.message || 'Failed to send 8-digit verification code. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -91,9 +97,9 @@ export default function ForgotPasswordScreen() {
   // Step 2: Verify OTP
   const handleVerifyOtp = async () => {
     const trimmedOtp = otp.trim();
-    if (!trimmedOtp || trimmedOtp.length < 6) {
+    if (!trimmedOtp || trimmedOtp.length < 8) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      useAlertStore.getState().showAlert('Validation Error', 'Please enter the 6-digit verification code.', 'warning');
+      useAlertStore.getState().showAlert('Validation Error', 'Please enter the 8-digit verification code.', 'warning');
       return;
     }
 
@@ -105,7 +111,11 @@ export default function ForgotPasswordScreen() {
       setStep('reset');
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      useAlertStore.getState().showAlert('Verification Failed', error.message || 'The OTP entered is incorrect or expired.', 'error');
+      useAlertStore.getState().showAlert(
+        'Verification Failed',
+        error?.message || 'The code entered is incorrect or expired. Please check your email and try again.',
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -141,7 +151,7 @@ export default function ForgotPasswordScreen() {
       );
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      useAlertStore.getState().showAlert('Update Failed', error.message || 'Failed to update your password. Please try again.', 'error');
+      useAlertStore.getState().showAlert('Update Failed', error?.message || 'Failed to update your password. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -194,8 +204,8 @@ export default function ForgotPasswordScreen() {
           </View>
           <Text style={[styles.title, { color: colors.text }]}>SPENDLY</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {step === 'request' && 'Enter your email to receive a password reset code'}
-            {step === 'verify' && `Enter the verification code sent to ${email}`}
+            {step === 'request' && 'Enter your email to receive an 8-digit verification code'}
+            {step === 'verify' && `Enter the 8-digit verification code sent to ${email}`}
             {step === 'reset' && 'Set a secure new password for your account'}
           </Text>
         </View>
@@ -243,7 +253,7 @@ export default function ForgotPasswordScreen() {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <>
-                  <Text style={styles.resetBtnText}>Send Reset Code</Text>
+                  <Text style={styles.resetBtnText}>Send Verification Code</Text>
                   <Send size={16} color="#FFF" style={{ marginLeft: 6 }} />
                 </>
               )}
@@ -251,10 +261,10 @@ export default function ForgotPasswordScreen() {
           </Card>
         )}
 
-        {/* STEP 2: Verify OTP */}
+        {/* STEP 2: Verify 8-digit OTP */}
         {step === 'verify' && (
           <Card style={styles.formCard} glassmorphism={true}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>6-DIGIT VERIFICATION CODE</Text>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>8-DIGIT VERIFICATION CODE</Text>
             <View style={[
               styles.inputRow, 
               { 
@@ -266,11 +276,11 @@ export default function ForgotPasswordScreen() {
               <Key size={18} color={otpFocused ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text, letterSpacing: 6, fontWeight: '700' }]}
-                placeholder="••••••"
+                placeholder="••••••••"
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
                 keyboardType="number-pad"
-                maxLength={6}
+                maxLength={8}
                 value={otp}
                 onChangeText={setOtp}
                 onFocus={() => setOtpFocused(true)}
@@ -295,7 +305,7 @@ export default function ForgotPasswordScreen() {
 
             <View style={styles.resendContainer}>
               <Text style={{ color: colors.textSecondary }}>{"Didn't receive the code? "}</Text>
-              <TouchableOpacity onPress={handleRequestOtp}>
+              <TouchableOpacity onPress={handleRequestOtp} disabled={loading}>
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>Resend Code</Text>
               </TouchableOpacity>
             </View>

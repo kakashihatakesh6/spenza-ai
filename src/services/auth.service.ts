@@ -34,7 +34,7 @@ export const authService = {
     const redirectUrl = Platform.OS === 'web'
       ? Linking.createURL('auth/callback')
       : 'spendly://auth/callback';
-    
+
     logger.info('Supabase OAuth Redirect URL', { redirectUrl });
 
     // On Web platforms, redirect the window directly
@@ -144,10 +144,13 @@ export const authService = {
   // Reset Password Request
   async sendPasswordResetEmail(email: string) {
     const redirectUrl = Linking.createURL('auth/reset-password');
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: redirectUrl,
     });
-    if (error) throw error;
+    if (error) {
+      logger.error('Failed to send password reset email', { message: error.message, status: error.status, name: error.name });
+      throw error;
+    }
     return data;
   },
 
@@ -158,11 +161,14 @@ export const authService = {
   // Verify OTP for Password Reset
   async verifyResetOtp(email: string, token: string) {
     const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
+      email: email.trim(),
+      token: token.trim(),
       type: 'recovery',
     });
-    if (error) throw error;
+    if (error) {
+      logger.error('Failed to verify reset OTP', { message: error.message, status: error.status, name: error.name });
+      throw error;
+    }
     return data;
   },
 
@@ -171,7 +177,10 @@ export const authService = {
     const { data, error } = await supabase.auth.updateUser({
       password,
     });
-    if (error) throw error;
+    if (error) {
+      logger.error('Failed to update user password', { message: error.message, status: error.status, name: error.name });
+      throw error;
+    }
     return data;
   },
 
