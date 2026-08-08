@@ -49,12 +49,6 @@ export default function SettingsScreen() {
   const [exportFilename, setExportFilename] = useState('');
   const [showTestCenter, setShowTestCenter] = useState(false);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   

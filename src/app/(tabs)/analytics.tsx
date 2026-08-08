@@ -36,11 +36,6 @@ export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
   const { expenses, categories, fetchExpenses, isLoading } = useExpenseStore();
   const { settings } = useSettingsStore();
 

@@ -62,11 +62,8 @@ export default function SecurityScreen() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
   useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
     fetchSessions();
-  }, [navigation]);
+  }, []);
 
   const fetchSessions = async () => {
     try {

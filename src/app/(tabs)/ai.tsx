@@ -27,12 +27,6 @@ export default function AiHubScreen() {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header

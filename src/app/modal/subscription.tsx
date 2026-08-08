@@ -41,12 +41,6 @@ export default function SubscriptionScreen() {
   const [cardName, setCardName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   const handleUpgrade = async () => {
     if (!isPro) {
       if (!cardNumber || !expiry || !cvv || !cardName) {

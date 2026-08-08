@@ -92,12 +92,6 @@ export default function Dashboard() {
     fetchBudgets();
   }, []);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   const todaySpend = expenseHelpers.getTodaySpend(expenses);
   const weeklySpend = expenseHelpers.getWeeklySpend(expenses);
   const monthlySpend = expenseHelpers.getMonthlySpend(expenses);
