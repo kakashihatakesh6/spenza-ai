@@ -71,6 +71,7 @@ function RootLayoutNav() {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         logger.info('App resumed');
+        useAuthStore.getState().validateSession();
       } else if (nextAppState === 'background') {
         logger.info('App moved to background');
       }
@@ -81,6 +82,7 @@ function RootLayoutNav() {
     const unsubscribeNetwork = networkMonitor.addListener((isOnline) => {
       if (isOnline) {
         logger.info('Internet restored');
+        useAuthStore.getState().validateSession();
       } else {
         logger.info('Offline detected');
       }
@@ -136,6 +138,17 @@ function RootLayoutNav() {
     }
   }, [authLoading, appReadyLogged]);
 
+  // Periodic heartbeat session check while logged in
+  useEffect(() => {
+    if (!user) return;
+    // Validate session every 30 seconds to detect remote revocation
+    const interval = setInterval(() => {
+      useAuthStore.getState().validateSession();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Route change logger
   useEffect(() => {
     const segs = segments as string[];
     if (segs.length === 0) return;
@@ -175,15 +188,45 @@ function RootLayoutNav() {
   return (
     <>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      {!authLoading && (
-        <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="auth/login" />
-        <Stack.Screen name="auth/register" />
-        <Stack.Screen name="auth/forgot-password" />
-        <Stack.Screen name="auth/reset-password" />
-        <Stack.Screen name="auth/callback" />
+      <Stack 
+        screenOptions={{ 
+          headerShown: false, 
+          contentStyle: { backgroundColor: colors.background },
+          animation: 'slide_from_right',
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: colors.background } }} />
+        <Stack.Screen name="auth/login" options={{ contentStyle: { backgroundColor: colors.background } }} />
+        <Stack.Screen name="auth/register" options={{ contentStyle: { backgroundColor: colors.background } }} />
+        <Stack.Screen name="auth/forgot-password" options={{ contentStyle: { backgroundColor: colors.background } }} />
+        <Stack.Screen name="auth/reset-password" options={{ contentStyle: { backgroundColor: colors.background } }} />
+        <Stack.Screen name="auth/callback" options={{ contentStyle: { backgroundColor: colors.background } }} />
         
+        {/* Explicitly registered modal & sub-screens */}
+        <Stack.Screen 
+          name="modal/edit-profile" 
+          options={{ 
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: colors.background },
+          }} 
+        />
+        
+        <Stack.Screen 
+          name="modal/security" 
+          options={{ 
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: colors.background },
+          }} 
+        />
+
+        <Stack.Screen 
+          name="modal/subscription" 
+          options={{ 
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: colors.background },
+          }} 
+        />
+
         <Stack.Screen 
           name="modal/add-expense" 
           options={{ 
@@ -195,6 +238,7 @@ function RootLayoutNav() {
             },
             headerTintColor: colors.text,
             headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
           }} 
         />
         
@@ -209,6 +253,7 @@ function RootLayoutNav() {
             },
             headerTintColor: colors.text,
             headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
           }} 
         />
 
@@ -223,6 +268,7 @@ function RootLayoutNav() {
             },
             headerTintColor: colors.text,
             headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
           }} 
         />
 
@@ -237,33 +283,31 @@ function RootLayoutNav() {
             },
             headerTintColor: colors.text,
             headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.background },
           }} 
         />
       </Stack>
-      )}
+
       {splashVisible && (
         <SplashScreen
           onAnimationEnd={() => setSplashVisible(false)}
           isLoading={authLoading}
         />
       )}
-      {authLoading && !splashVisible && (
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: theme === 'dark' ? '#0B0F19' : '#FFFFFF', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ color: colors.text, marginTop: 16, fontSize: 15, fontWeight: '700' }}>Signing out...</Text>
-        </View>
-      )}
+
       <CustomAlertModal />
     </>
   );
 }
 
 export default function RootLayout() {
+  const { colors } = useTheme();
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: colors.background }}>
         <RootLayoutNav />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+

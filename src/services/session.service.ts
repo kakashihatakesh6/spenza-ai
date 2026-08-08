@@ -105,20 +105,71 @@ export const sessionService = {
   },
 
   /**
-   * Register or update current session in Supabase user metadata and retrieve all active sessions
+   * Register or refresh the current device session in user metadata upon login
    */
-  async getActiveSessions(): Promise<SessionItem[]> {
+  async registerCurrentDevice(): Promise<void> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       const deviceId = await this.getDeviceId();
       const { deviceName, type } = this.getDeviceNameAndType();
-      const network = await this.getNetworkDetails();
-
       const now = new Date().toISOString();
 
-      // Construct current session object
+      let storedDevices: any[] = user.user_metadata?.active_devices || [];
+
+      // If current device is already registered and updated within last 30 minutes, skip API update to avoid event loops
+      const existing = storedDevices.find((d) => d.id === deviceId);
+      if (existing) {
+        const lastActiveTime = new Date(existing.lastActiveAt || 0).getTime();
+        const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
+        if (lastActiveTime > thirtyMinsAgo) {
+          return;
+        }
+      }
+
+      const network = await this.getNetworkDetails();
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      storedDevices = storedDevices.filter((d) => {
+        const time = new Date(d.lastActiveAt || 0).getTime();
+        return time > thirtyDaysAgo && d.id !== deviceId;
+      });
+
+      const currentDeviceObj = {
+        id: deviceId,
+        device: deviceName,
+        location: network.location,
+        ip: network.ip,
+        type,
+        lastActiveAt: now,
+      };
+
+      const updatedDevices = [currentDeviceObj, ...storedDevices];
+
+      await supabase.auth.updateUser({
+        data: {
+          active_devices: updatedDevices,
+        },
+      });
+      logger.info('Registered current device session', { deviceId, deviceName });
+    } catch (err) {
+      logger.warn('Failed to register current device session', err);
+    }
+  },
+
+  /**
+   * Fetch all active sessions for the current user from Supabase metadata (Read-Only)
+   */
+  async getActiveSessions(): Promise<SessionItem[]> {
+    try {
+      // Fetch fresh user data directly from Supabase server (not stale local cache)
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      const deviceId = await this.getDeviceId();
+      const { deviceName, type } = this.getDeviceNameAndType();
+      const network = await this.getNetworkDetails();
+      const now = new Date().toISOString();
+
       const currentSessionItem: SessionItem = {
         id: deviceId,
         device: deviceName,
@@ -130,12 +181,12 @@ export const sessionService = {
         lastActiveAt: now,
       };
 
-      if (!user) {
+      if (error || !user) {
         return [currentSessionItem];
       }
 
-      // Read existing active devices stored in user metadata
-      let storedDevices: SessionItem[] = user.user_metadata?.active_devices || [];
+      // Read stored active devices from user_metadata
+      let storedDevices: any[] = user.user_metadata?.active_devices || [];
 
       // Filter out stale devices older than 30 days
       const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -144,35 +195,19 @@ export const sessionService = {
         return time > thirtyDaysAgo && d.id !== deviceId;
       });
 
-      // Mark stored devices as isCurrent: false and format relative time
+      // Format relative time for other sessions
       const formattedOtherSessions = storedDevices.map((d) => ({
-        ...d,
-        isCurrent: false,
+        id: d.id,
+        device: d.device,
+        location: d.location || 'Local Device',
+        ip: d.ip || 'Connected',
         time: formatRelativeTime(d.lastActiveAt),
+        isCurrent: false,
+        type: (d.type as 'mobile' | 'desktop') || 'mobile',
+        lastActiveAt: d.lastActiveAt || now,
       }));
 
-      // Combine current session + stored other sessions
-      const allSessions = [currentSessionItem, ...formattedOtherSessions];
-
-      // Save updated active devices back to Supabase metadata asynchronously
-      try {
-        await supabase.auth.updateUser({
-          data: {
-            active_devices: allSessions.map((s) => ({
-              id: s.id,
-              device: s.device,
-              location: s.location,
-              ip: s.ip,
-              type: s.type,
-              lastActiveAt: s.lastActiveAt,
-            })),
-          },
-        });
-      } catch (err) {
-        logger.warn('Failed to update active_devices in user metadata', err);
-      }
-
-      return allSessions;
+      return [currentSessionItem, ...formattedOtherSessions];
     } catch (error) {
       logger.error('Failed to get active sessions', error);
       const { deviceName, type } = this.getDeviceNameAndType();

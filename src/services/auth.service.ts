@@ -16,6 +16,9 @@ export const authService = {
       password,
     });
     if (error) throw error;
+    if (data?.session) {
+      await sessionService.registerCurrentDevice();
+    }
     return data;
   },
 
@@ -26,8 +29,12 @@ export const authService = {
       password,
     });
     if (error) throw error;
+    if (data?.session) {
+      await sessionService.registerCurrentDevice();
+    }
     return data;
   },
+
 
   // Google Sign-In (OAuth Flow via expo-web-browser)
   async signInWithGoogle() {
