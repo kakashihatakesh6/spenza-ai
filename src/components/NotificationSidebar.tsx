@@ -7,24 +7,29 @@ import {
   ScrollView,
   Modal,
   Platform,
-  Animated,
+  Animated as RNAnimated,
+  Easing,
   Dimensions,
   Pressable,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
-import { useNotificationStore } from '../store/notificationStore';
+import { useNotificationStore, NotificationItem } from '../store/notificationStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import {
   AlertTriangle,
   CheckCircle,
   Shield,
-  Lightbulb,
-  Check,
+  Info,
   BellOff,
   Trash2,
   Clock,
+  Music,
+  Tv,
+  Smartphone,
 } from 'lucide-react-native';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -33,15 +38,76 @@ interface NotificationSidebarProps {
   onClose: () => void;
 }
 
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  type: 'warning' | 'success' | 'security' | 'info';
-  categoryName: string;
-  time: string;
-  read: boolean;
-}
+// Skeleton Loader for Notifications
+const NotificationSkeleton = ({ colors, isDark }: { colors: any; isDark: boolean }) => {
+  const opacityAnim = useRef(new RNAnimated.Value(0.3)).current;
+
+  useEffect(() => {
+    const loop = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(opacityAnim, {
+          toValue: 0.8,
+          duration: 700,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        RNAnimated.timing(opacityAnim, {
+          toValue: 0.3,
+          duration: 700,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacityAnim]);
+
+  const skeletonBg = isDark ? '#1E293B' : '#E2E8F0';
+
+  return (
+    <View style={styles.skeletonList}>
+      {[1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          style={[
+            styles.skeletonCard,
+            { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.6)' : '#F4F5FA' },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <RNAnimated.View
+              style={[
+                styles.skeletonIconCircle,
+                { backgroundColor: skeletonBg, opacity: opacityAnim },
+              ]}
+            />
+            <View style={{ flex: 1 }}>
+              <RNAnimated.View
+                style={[
+                  styles.skeletonTextLine,
+                  { backgroundColor: skeletonBg, opacity: opacityAnim, width: '65%' },
+                ]}
+              />
+              <RNAnimated.View
+                style={[
+                  styles.skeletonTextLine,
+                  { backgroundColor: skeletonBg, opacity: opacityAnim, width: '85%', marginTop: 8 },
+                ]}
+              />
+              <RNAnimated.View
+                style={[
+                  styles.skeletonTextLine,
+                  { backgroundColor: skeletonBg, opacity: opacityAnim, width: '40%', marginTop: 8 },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
   visible,
@@ -50,24 +116,42 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // Animation setup: Start offscreen to the right (screenWidth)
-  const slideAnim = useRef(new Animated.Value(screenWidth)).current;
+  const slideAnim = useRef(new RNAnimated.Value(screenWidth)).current;
+
+  const notifications = useNotificationStore((state) => state.notifications);
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const deleteNotification = useNotificationStore((state) => state.deleteNotification);
+  const loadNotifications = useNotificationStore((state) => state.loadNotifications);
 
   useEffect(() => {
     if (visible) {
-      Animated.timing(slideAnim, {
+      setIsLoading(true);
+      RNAnimated.timing(slideAnim, {
         toValue: 0,
-        duration: 320,
+        duration: 300,
         useNativeDriver: true,
       }).start();
+
+      let isMounted = true;
+      loadNotifications().then(() => {
+        setTimeout(() => {
+          if (isMounted) setIsLoading(false);
+        }, 250);
+      });
+
+      return () => {
+        isMounted = false;
+      };
     } else {
       slideAnim.setValue(screenWidth);
     }
   }, [visible]);
 
   const handleClose = () => {
-    Animated.timing(slideAnim, {
+    RNAnimated.timing(slideAnim, {
       toValue: screenWidth,
       duration: 250,
       useNativeDriver: true,
@@ -76,49 +160,55 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
     });
   };
 
-  const notifications = useNotificationStore((state) => state.notifications);
-  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
-  const clearAll = useNotificationStore((state) => state.clearAll);
-  const toggleRead = useNotificationStore((state) => state.toggleRead);
-
-  const filteredNotifications = notifications.filter(n => {
+  const filteredNotifications = notifications.filter((n) => {
     if (filter === 'unread') return !n.read;
     return true;
   });
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'warning':
-        return <AlertTriangle size={18} color={isDark ? '#FBBF24' : '#D97706'} />;
-      case 'success':
-        return <CheckCircle size={18} color={isDark ? '#34D399' : '#059669'} />;
-      case 'security':
-        return <Shield size={18} color={isDark ? '#F87171' : '#DC2626'} />;
-      default:
-        return <Lightbulb size={18} color={isDark ? '#60A5FA' : '#2563EB'} />;
+  const getNotificationIcon = (item: NotificationItem) => {
+    const titleLower = item.title.toLowerCase();
+    const msgLower = item.message.toLowerCase();
+
+    if (titleLower.includes('song') || titleLower.includes('tune') || msgLower.includes('tune')) {
+      return <Music size={18} color="#2563EB" />;
     }
+    if (titleLower.includes('tv') || titleLower.includes('channel') || msgLower.includes('show')) {
+      return <Tv size={18} color="#2563EB" />;
+    }
+    if (titleLower.includes('recharge') || item.type === 'warning') {
+      return <Info size={18} color="#EF4444" />;
+    }
+    if (item.type === 'security') {
+      return <Shield size={18} color="#EF4444" />;
+    }
+    if (item.type === 'success') {
+      return <CheckCircle size={18} color="#10B981" />;
+    }
+    return <Smartphone size={18} color="#2563EB" />;
   };
 
-  const getIconBg = (type: string) => {
-    switch (type) {
-      case 'warning':
-        return isDark ? 'rgba(251, 191, 36, 0.12)' : 'rgba(251, 191, 36, 0.08)';
-      case 'success':
-        return isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(52, 211, 153, 0.08)';
-      case 'security':
-        return isDark ? 'rgba(248, 113, 113, 0.12)' : 'rgba(248, 113, 113, 0.08)';
-      default:
-        return isDark ? 'rgba(96, 165, 250, 0.12)' : 'rgba(96, 165, 250, 0.08)';
+  const getIconContainerBg = (item: NotificationItem) => {
+    const titleLower = item.title.toLowerCase();
+    if (titleLower.includes('recharge') || item.type === 'warning' || item.type === 'security') {
+      return isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2';
     }
+    if (item.type === 'success') {
+      return isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5';
+    }
+    return isDark ? 'rgba(37, 99, 235, 0.15)' : '#DBEAFE';
   };
 
-  const getBadgeColor = (type: string) => {
-    switch (type) {
-      case 'warning': return isDark ? '#FBBF24' : '#D97706';
-      case 'success': return isDark ? '#34D399' : '#059669';
-      case 'security': return isDark ? '#F87171' : '#DC2626';
-      default: return isDark ? '#60A5FA' : '#2563EB';
-    }
+  const renderRightSwipeActions = (id: string) => {
+    return (
+      <TouchableOpacity
+        style={styles.swipeDeleteActionBtn}
+        onPress={() => deleteNotification(id)}
+        activeOpacity={0.8}
+      >
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text style={styles.swipeDeleteText}>Delete</Text>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -129,198 +219,205 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
       statusBarTranslucent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
-        {/* Animated Container sliding from right */}
-        <Animated.View
-          style={[
-            styles.fullscreenContainer,
-            {
-              backgroundColor: colors.background,
-              transform: [{ translateX: slideAnim }],
-            },
-          ]}
-        >
-          {/* Header matching main screen header */}
-          <View
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={styles.modalOverlay}>
+          {/* Animated Container sliding from right */}
+          <RNAnimated.View
             style={[
-              styles.headerContainer,
+              styles.fullscreenContainer,
               {
-                paddingTop: insets.top + 8,
-                height: 65 + insets.top,
-                backgroundColor: colors.card,
-                borderBottomColor: colors.border,
+                backgroundColor: colors.background,
+                transform: [{ translateX: slideAnim }],
               },
             ]}
           >
-            {/* Title Container (Absolutely Centered) */}
-            <View style={[styles.headerTitleContainer, { top: insets.top }]}>
-              <Text style={[styles.headerTitleText, { color: colors.text }]}>NOTIFICATIONS</Text>
+            {/* Header matching main screen header */}
+            <View
+              style={[
+                styles.headerContainer,
+                {
+                  paddingTop: insets.top + 8,
+                  height: 65 + insets.top,
+                  backgroundColor: colors.card,
+                  borderBottomColor: colors.border,
+                },
+              ]}
+            >
+              {/* Title Container (Centred) */}
+              <View style={[styles.headerTitleContainer, { top: insets.top }]}>
+                <Text style={[styles.headerTitleText, { color: colors.text }]}>NOTIFICATIONS</Text>
+              </View>
+
+              {/* Left Action Button (Back Button) */}
+              <View style={styles.headerActionWrapper}>
+                <Pressable
+                  onPress={handleClose}
+                  style={({ pressed }) => [
+                    styles.headerBackButton,
+                    { backgroundColor: isDark ? '#1E293B' : '#F3F4F6' },
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Feather name="chevron-left" size={24} color={colors.text} style={{ marginRight: 2 }} />
+                </Pressable>
+              </View>
+
+              {/* Right Action Wrapper */}
+              <View style={styles.headerActionWrapper}>
+                <View style={styles.headerPlaceholder} />
+              </View>
             </View>
 
-            {/* Left Action Button (Back Button) */}
-            <View style={styles.headerActionWrapper}>
-              <Pressable
-                onPress={handleClose}
-                style={({ pressed }) => [
-                  styles.headerBackButton,
-                  { backgroundColor: isDark ? '#1E293B' : '#F3F4F6' },
-                  pressed && styles.buttonPressed,
+            {/* Filter Pill Tabs - ALWAYS PRESENT EVEN IF 0 NOTIFICATIONS */}
+            <View style={[styles.pillTabsRow, { backgroundColor: colors.background }]}>
+              <TouchableOpacity
+                style={[
+                  styles.pillTab,
+                  filter === 'all'
+                    ? [
+                        styles.pillTabActive,
+                        { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
+                      ]
+                    : [
+                        styles.pillTabInactive,
+                        { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
+                      ],
                 ]}
+                onPress={() => setFilter('all')}
+                activeOpacity={0.8}
               >
-                <Feather name="chevron-left" size={24} color={colors.text} style={{ marginRight: 2 }} />
-              </Pressable>
-            </View>
-
-            {/* Right Action Button (Placeholder to keep layout balanced) */}
-            <View style={styles.headerActionWrapper}>
-              <View style={styles.headerPlaceholder} />
-            </View>
-          </View>
-
-          {/* Filter Selection Panel */}
-          {notifications.length > 0 && (
-            <View style={[styles.filterBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-              <View style={styles.tabs}>
-                <TouchableOpacity
+                <Text
                   style={[
-                    styles.tab,
-                    filter === 'all' && [styles.activeTab, { borderBottomColor: colors.primary }],
-                  ]}
-                  onPress={() => setFilter('all')}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      { color: filter === 'all' ? colors.primary : colors.textSecondary },
-                    ]}
-                  >
-                    All Alerts
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    filter === 'unread' && [styles.activeTab, { borderBottomColor: colors.primary }],
-                  ]}
-                  onPress={() => setFilter('unread')}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      { color: filter === 'unread' ? colors.primary : colors.textSecondary },
-                    ]}
-                  >
-                    Unread ({notifications.filter(n => !n.read).length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.actionIcons}>
-                <TouchableOpacity
-                  onPress={markAllAsRead}
-                  style={[styles.actionBtn, { borderColor: colors.border }]}
-                  activeOpacity={0.7}
-                >
-                  <Check size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={[styles.actionBtnText, { color: colors.primary }]}>Read All</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={clearAll}
-                  style={[styles.actionBtn, { borderColor: colors.border }]}
-                  activeOpacity={0.7}
-                >
-                  <Trash2 size={14} color={colors.danger} style={{ marginRight: 4 }} />
-                  <Text style={[styles.actionBtnText, { color: colors.danger }]}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Notifications Scroll list */}
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredNotifications.length > 0 ? (
-              filteredNotifications.map(item => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.notificationCard,
+                    styles.pillTabText,
                     {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      shadowColor: isDark ? '#000000' : 'rgba(99, 102, 241, 0.04)',
+                      color: filter === 'all'
+                        ? (isDark ? '#34D399' : '#046B5C')
+                        : colors.text,
                     },
-                    !item.read && [styles.unreadCard, { borderLeftColor: colors.primary }],
                   ]}
-                  onPress={() => toggleRead(item.id)}
-                  activeOpacity={0.9}
                 >
-                  <View style={styles.cardHeader}>
-                    <View
-                      style={[
-                        styles.iconWrapper,
-                        { backgroundColor: getIconBg(item.type) },
-                      ]}
-                    >
-                      {getIcon(item.type)}
-                    </View>
-                    
-                    <View style={styles.categoryBadgeWrapper}>
-                      <View style={[styles.categoryBadge, { backgroundColor: getIconBg(item.type) }]}>
-                        <Text style={[styles.categoryBadgeText, { color: getBadgeColor(item.type) }]}>
-                          {item.categoryName}
-                        </Text>
-                      </View>
-                    </View>
+                  All
+                </Text>
+              </TouchableOpacity>
 
-                    {!item.read && (
-                      <View style={[styles.unreadDotIndicator, { backgroundColor: colors.primary }]} />
-                    )}
+              <TouchableOpacity
+                style={[
+                  styles.pillTab,
+                  filter === 'unread'
+                    ? [
+                        styles.pillTabActive,
+                        { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
+                      ]
+                    : [
+                        styles.pillTabInactive,
+                        { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
+                      ],
+                ]}
+                onPress={() => setFilter('unread')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.pillTabText,
+                    {
+                      color: filter === 'unread'
+                        ? (isDark ? '#34D399' : '#046B5C')
+                        : colors.text,
+                    },
+                  ]}
+                >
+                  Unread
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Notifications Content */}
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {isLoading ? (
+                <NotificationSkeleton colors={colors} isDark={isDark} />
+              ) : filteredNotifications.length > 0 ? (
+                filteredNotifications.map((item, index) => (
+                  <Animated.View key={item.id} entering={FadeInUp.duration(300).delay(index * 40)}>
+                    <Swipeable
+                      renderRightActions={() => renderRightSwipeActions(item.id)}
+                      friction={2}
+                      rightThreshold={40}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.notificationCard,
+                          {
+                            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.6)' : '#F4F5FA',
+                            borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'transparent',
+                          },
+                        ]}
+                        onPress={() => markAsRead(item.id)}
+                        activeOpacity={0.85}
+                      >
+                        {/* Red Dot Unread Indicator */}
+                        {!item.read && <View style={styles.unreadRedDot} />}
+
+                        <View style={styles.cardContentRow}>
+                          <View
+                            style={[
+                              styles.iconCircleBadge,
+                              { backgroundColor: getIconContainerBg(item) },
+                            ]}
+                          >
+                            {getNotificationIcon(item)}
+                          </View>
+
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.cardTitle,
+                                { color: colors.text },
+                                !item.read && styles.unreadTitleBold,
+                              ]}
+                            >
+                              {item.title}
+                            </Text>
+
+                            <Text style={[styles.cardMsg, { color: colors.textSecondary }]}>
+                              {item.message}
+                            </Text>
+
+                            <View style={styles.cardTimeRow}>
+                              <Clock size={11} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                              <Text style={[styles.cardTime, { color: colors.textSecondary }]}>
+                                {item.time}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    </Swipeable>
+                  </Animated.View>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyIconBg, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <BellOff size={36} color={colors.textSecondary} />
                   </View>
-                  
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: colors.text },
-                      !item.read && styles.unreadTitleText,
-                    ]}
-                  >
-                    {item.title}
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    {filter === 'unread' ? 'No Unread Notifications' : 'No Notifications'}
                   </Text>
-                  
-                  <Text style={[styles.cardMsg, { color: colors.textSecondary }]}>
-                    {item.message}
+                  <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
+                    {filter === 'unread'
+                      ? 'You have read all your alerts.'
+                      : 'You have no notifications at this time.'}
                   </Text>
-                  
-                  <View style={[styles.cardFooter, { borderTopColor: isDark ? '#1F293D' : '#F9FAFB' }]}>
-                    <Clock size={11} color={colors.textSecondary} style={{ marginRight: 6 }} />
-                    <Text style={[styles.cardTime, { color: colors.textSecondary }]}>
-                      {item.time}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <View style={[styles.emptyIconBg, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <BellOff size={36} color={colors.textSecondary} />
                 </View>
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  All Caught Up!
-                </Text>
-                <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-                  No new account notifications found. We will alert you here regarding budget parameters, scanning outputs, and security milestones.
-                </Text>
-              </View>
-            )}
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </Animated.View>
-      </View>
+              )}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </RNAnimated.View>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
@@ -334,172 +431,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  filterBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    paddingTop: 8,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  tab: {
-    paddingBottom: 12,
-    borderBottomWidth: 2.5,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomWidth: 2.5,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  actionIcons: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    bottom: 4,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  actionBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 16,
-  },
-  notificationCard: {
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  unreadCard: {
-    borderLeftWidth: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 10,
-  },
-  iconWrapper: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryBadgeWrapper: {
-    flex: 1,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  categoryBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  unreadDotIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  unreadTitleText: {
-    fontWeight: '800',
-  },
-  cardMsg: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 10,
-  },
-  cardTime: {
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 140,
-    paddingHorizontal: 32,
-  },
-  emptyIconBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 8,
-  },
-  emptyDesc: {
-    fontSize: 12.5,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
     borderBottomWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
   headerTitleContainer: {
     position: 'absolute',
@@ -526,17 +463,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
   buttonPressed: {
     opacity: 0.7,
@@ -544,5 +470,153 @@ const styles = StyleSheet.create({
   headerPlaceholder: {
     width: 40,
     height: 40,
+  },
+
+  // Pill Tabs (All, Unread) matching screenshot
+  pillTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  pillTab: {
+    paddingHorizontal: 22,
+    paddingVertical: 8,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pillTabActive: {
+    borderWidth: 0,
+  },
+  pillTabInactive: {
+    borderWidth: 1.5,
+  },
+  pillTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 12,
+  },
+
+  // Notification Card matching screenshot
+  notificationCard: {
+    borderRadius: 18,
+    padding: 16,
+    position: 'relative',
+  },
+  unreadRedDot: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    zIndex: 2,
+  },
+  cardContentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  iconCircleBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  unreadTitleBold: {
+    fontWeight: '800',
+  },
+  cardMsg: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  cardTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardTime: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // Swipe Action
+  swipeDeleteActionBtn: {
+    width: 80,
+    height: '100%',
+    backgroundColor: '#EF4444',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  swipeDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+
+  // Skeleton Styles
+  skeletonList: {
+    gap: 12,
+  },
+  skeletonCard: {
+    borderRadius: 18,
+    padding: 16,
+  },
+  skeletonIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  skeletonTextLine: {
+    height: 12,
+    borderRadius: 6,
+  },
+
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+    paddingHorizontal: 32,
+  },
+  emptyIconBg: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  emptyDesc: {
+    fontSize: 12.5,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
