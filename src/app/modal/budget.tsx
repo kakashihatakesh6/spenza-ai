@@ -35,6 +35,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { expenseHelpers } from '../../utils/expenseHelpers';
+import { expenseRepository } from '../../database/repositories/expenseRepository';
 import { Budget } from '../../types';
 
 const { width } = Dimensions.get('window');
@@ -120,6 +121,58 @@ const BudgetSkeleton = ({ colors, isDark }: { colors: any; isDark: boolean }) =>
   );
 };
 
+// Goals Specific Skeleton Component
+const GoalsSkeleton = ({ colors, isDark }: { colors: any; isDark: boolean }) => {
+  const opacityAnim = useRef(new RNAnimated.Value(0.3)).current;
+
+  useEffect(() => {
+    const loop = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(opacityAnim, {
+          toValue: 0.8,
+          duration: 700,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        RNAnimated.timing(opacityAnim, {
+          toValue: 0.3,
+          duration: 700,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacityAnim]);
+
+  const skeletonBg = isDark ? '#1E293B' : '#E2E8F0';
+
+  return (
+    <View style={{ gap: 12 }}>
+      {[1, 2, 3].map((i) => (
+        <View key={i} style={[styles.skeletonGoalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+              <RNAnimated.View style={[styles.skeletonIcon, { backgroundColor: skeletonBg, opacity: opacityAnim }]} />
+              <View style={{ flex: 1 }}>
+                <RNAnimated.View style={[styles.skeletonLine, { backgroundColor: skeletonBg, opacity: opacityAnim, width: '55%' }]} />
+                <RNAnimated.View style={[styles.skeletonLine, { backgroundColor: skeletonBg, opacity: opacityAnim, width: '35%', marginTop: 6 }]} />
+              </View>
+            </View>
+            <RNAnimated.View style={{ width: 44, height: 22, borderRadius: 8, backgroundColor: skeletonBg, opacity: opacityAnim }} />
+          </View>
+          <RNAnimated.View style={[styles.skeletonBar, { backgroundColor: skeletonBg, opacity: opacityAnim }]} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+            <RNAnimated.View style={{ width: 80, height: 10, borderRadius: 5, backgroundColor: skeletonBg, opacity: opacityAnim }} />
+            <RNAnimated.View style={{ width: 100, height: 10, borderRadius: 5, backgroundColor: skeletonBg, opacity: opacityAnim }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 export default function BudgetModal() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -130,6 +183,7 @@ export default function BudgetModal() {
   const { settings } = useSettingsStore();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isGoalsLoading, setIsGoalsLoading] = useState(true);
 
   // Form states
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -142,16 +196,55 @@ export default function BudgetModal() {
       headerShown: false,
     });
 
-    // Instant local fetch from SQLite
-    fetchBudgets();
-    fetchExpenses();
+    let isMounted = true;
 
-    // Short timeout to guarantee smooth screen transition animation before revealing full UI
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 320);
+    const loadBudgetScreenData = async () => {
+      setIsLoading(true);
+      setIsGoalsLoading(true);
 
-    return () => clearTimeout(timer);
+      try {
+        // 1. Read cached SQLite budgets & expenses immediately
+        const localBudgets = expenseRepository.getAllBudgets();
+        const localExpenses = expenseRepository.getAllExpenses();
+        const localCategories = expenseRepository.getAllCategories();
+
+        useExpenseStore.setState({
+          budgets: localBudgets,
+          expenses: localExpenses,
+          categories: localCategories.length > 0 ? localCategories : useExpenseStore.getState().categories,
+        });
+
+        // 2. Smooth screen transition for form (~120ms)
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      } catch (err) {
+        console.error('Error loading local budget data:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+
+      // 3. Await store/remote fetch for Active Budget Goals so skeleton loader remains active in goals section until data is fully loaded
+      try {
+        await Promise.all([
+          fetchBudgets(),
+          fetchExpenses(),
+          new Promise((resolve) => setTimeout(resolve, 300)),
+        ]);
+      } catch (err) {
+        console.error('Error syncing remote budget data:', err);
+      } finally {
+        if (isMounted) {
+          setIsGoalsLoading(false);
+        }
+      }
+    };
+
+    loadBudgetScreenData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [navigation]);
 
   // Helper to get category metadata
@@ -520,12 +613,16 @@ export default function BudgetModal() {
                   <Target size={16} color={colors.primary} />
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>ACTIVE BUDGET GOALS</Text>
                 </View>
-                <View style={[styles.countBadge, { backgroundColor: colors.primaryLight }]}>
-                  <Text style={[styles.countBadgeText, { color: colors.primary }]}>{budgets.length}</Text>
-                </View>
+                {!isGoalsLoading && (
+                  <View style={[styles.countBadge, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.countBadgeText, { color: colors.primary }]}>{budgets.length}</Text>
+                  </View>
+                )}
               </View>
 
-              {budgets.length === 0 ? (
+              {isGoalsLoading ? (
+                <GoalsSkeleton colors={colors} isDark={isDark} />
+              ) : budgets.length === 0 ? (
                 <Card style={[styles.emptyCard, { borderColor: colors.border }]}>
                   <View style={[styles.emptyIconBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9' }]}>
                     <Settings size={32} color={colors.textSecondary} />
