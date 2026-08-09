@@ -187,7 +187,8 @@ You are equipped with real, executable tools to perform actions on behalf of the
 - update_user_profile(displayName, monthlyIncome, preferredCurrency, language, timezone, preferences): Call this tool WHENEVER the user provides or asks to update their display name, monthly income, preferred currency (USD, INR, EUR, etc.), language, timezone, or bio.
 - get_user_profile(): Call this tool to fetch current profile details.
 - update_transaction(transactionId, merchant, category, amount, currency, paymentMethod, date, notes): Call this tool WHENEVER the user asks to update an expense amount, category, merchant, date, or correct OCR errors.
-- search_transactions(query, category, merchant, startDate, endDate, limit): Call this tool to find user expenses.
+- search_transactions(query, category, merchant, startDate, endDate, targetCurrency, limit): Call this tool to find user expenses. If the user asks to show or view transactions in a specific currency (such as GBP, INR, EUR, USD), set targetCurrency to that currency code! Present transactions with both their original amount & currency and the converted amount formatted with the target currency symbol/code (£, ₹, €, $).
+- export_transactions_csv(category, merchant, startDate, endDate): Call this tool WHENEVER the user asks to export transactions to CSV, Excel, or save their transaction report.
 - get_financial_analytics(analysisType, month, year, category): Call this tool WHENEVER the user asks for spending totals, monthly/weekly/yearly spending, category/merchant breakdown, budget utilization, income vs expense, savings rate, or highest/lowest expenses.
 - search_knowledge_base(query, topK): Call this tool WHENEVER the user asks about Spendly app features, OCR scanner, receipt upload, offline mode, guides, or policies.
 - update_budget(category, amount, period): Call this tool WHENEVER the user asks to set, create, or update a budget limit (e.g. increase food budget to ₹6000).
@@ -195,9 +196,11 @@ You are equipped with real, executable tools to perform actions on behalf of the
 
 MANDATORY RULES:
 1. YOU MUST CALL THE APPROPRIATE TOOL FOR EVERY REQUEST MATCHING A TOOL CAPABILITY. NEVER claim you cannot perform updates or read user data—you HAVE the tools!
-2. If the user request requires multiple operations (e.g. updating profile/budget AND calculating spending), YOU MUST CALL MULTIPLE TOOLS IN SEQUENCE.
-3. When search_knowledge_base is used, cite documentation sources using brackets like [1], [2].
-4. Always be professional, clear, accurate, and concise.`;
+2. If the user request asks to view transactions in GBP, INR, EUR, or USD, ALWAYS pass targetCurrency to search_transactions!
+3. If the user asks to export transactions to CSV or Excel, ALWAYS call export_transactions_csv. Summarize the exported list and ALWAYS append the JSON array of exported transactions at the very end of your message in this exact hidden format: <!--CSV_DATA:[{"id":"...","amount":120,"merchant":"...","category":"...","date":"YYYY-MM-DD","currency":"INR"}]--> so the app can export ONLY the exact generated transactions list to the user's device!
+4. If the user request requires multiple operations, YOU MUST CALL MULTIPLE TOOLS IN SEQUENCE.
+5. When search_knowledge_base is used, cite documentation sources using brackets like [1], [2].
+6. Always be professional, clear, accurate, and concise.`;
 
     // 9. Initialize Groq Model with Tool Binding (openai/gpt-oss-120b)
     const llm = new ChatOpenAI({

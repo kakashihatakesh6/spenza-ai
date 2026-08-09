@@ -61,7 +61,15 @@ export const BotAvatar: React.FC<BotAvatarProps> = ({
     }
   }
 
-  const effectiveIconColor = iconColor || (variant === 'outline' ? colors.primary : '#FFFFFF');
+  const effectiveIconColor =
+    iconColor ||
+    (variant === 'outline'
+      ? colors.primary
+      : variant === 'glow'
+      ? isDark
+        ? '#818CF8'
+        : '#4F46E5'
+      : '#FFFFFF');
 
   // Variant styling
   const getVariantStyles = () => {
@@ -69,39 +77,39 @@ export const BotAvatar: React.FC<BotAvatarProps> = ({
       case 'fab':
         return {
           backgroundColor: isDark ? '#6366F1' : '#4F46E5',
-          borderColor: 'rgba(255, 255, 255, 0.35)',
+          borderColor: isDark ? '#818CF8' : 'rgba(255, 255, 255, 0.6)',
           borderWidth: 1.5,
           shadowColor: isDark ? '#818CF8' : '#4F46E5',
           shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.45,
+          shadowOpacity: isDark ? 0.6 : 0.35,
           shadowRadius: 10,
           elevation: 10,
         };
       case 'glow':
         return {
-          backgroundColor: isDark ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.12)',
+          backgroundColor: isDark ? 'rgba(99, 102, 241, 0.25)' : '#EEF2FF',
           borderColor: isDark ? '#818CF8' : '#6366F1',
           borderWidth: 1.5,
-          shadowColor: colors.primary,
+          shadowColor: isDark ? '#818CF8' : '#4F46E5',
           shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.35,
+          shadowOpacity: isDark ? 0.45 : 0.25,
           shadowRadius: 8,
           elevation: 6,
         };
       case 'gradient':
         return {
           backgroundColor: isDark ? '#312E81' : '#4F46E5',
-          borderColor: isDark ? '#6366F1' : 'rgba(255, 255, 255, 0.3)',
-          borderWidth: 1,
+          borderColor: isDark ? '#818CF8' : 'rgba(255, 255, 255, 0.4)',
+          borderWidth: 1.5,
           shadowColor: '#6366F1',
           shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 6,
+          shadowOpacity: 0.4,
+          shadowRadius: 7,
           elevation: 5,
         };
       case 'outline':
         return {
-          backgroundColor: 'transparent',
+          backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : 'rgba(79, 70, 229, 0.05)',
           borderColor: colors.primary,
           borderWidth: 1.5,
         };
@@ -109,6 +117,11 @@ export const BotAvatar: React.FC<BotAvatarProps> = ({
       default:
         return {
           backgroundColor: colors.primary,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.3,
+          shadowRadius: 5,
+          elevation: 4,
         };
     }
   };
@@ -131,19 +144,31 @@ export const BotAvatar: React.FC<BotAvatarProps> = ({
       {showPulse && (
         <View
           style={[
-            styles.pulseDot,
+            styles.pulseDotRing,
             {
-              width: pulseSize,
-              height: pulseSize,
-              borderRadius: pulseSize / 2,
-              backgroundColor: pulseColor,
-              borderColor: isDark ? '#0F172A' : '#FFFFFF',
-              borderWidth: Math.max(1, Math.round(pulseSize * 0.2)),
-              top: Math.round(containerSize * 0.02),
-              right: Math.round(containerSize * 0.02),
+              width: pulseSize + 4,
+              height: pulseSize + 4,
+              borderRadius: (pulseSize + 4) / 2,
+              backgroundColor: pulseColor + '33',
+              top: Math.max(0, Math.round(containerSize * 0.01) - 2),
+              right: Math.max(0, Math.round(containerSize * 0.01) - 2),
             },
           ]}
-        />
+        >
+          <View
+            style={[
+              styles.pulseDot,
+              {
+                width: pulseSize,
+                height: pulseSize,
+                borderRadius: pulseSize / 2,
+                backgroundColor: pulseColor,
+                borderColor: isDark ? '#0F172A' : '#FFFFFF',
+                borderWidth: Math.max(1, Math.round(pulseSize * 0.2)),
+              },
+            ]}
+          />
+        </View>
       )}
     </View>
   );
@@ -155,8 +180,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  pulseDot: {
+  pulseDotRing: {
     position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseDot: {
     shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.6,

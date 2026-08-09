@@ -19,7 +19,9 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
+import { useExpenseStore } from '../../store/expenseStore';
 import { useAlertStore } from '../../store/alertStore';
+import { exportService } from '../../services/exportService';
 import { Header } from '../../components/Header';
 import { BotAvatar } from '../../components/BotAvatar';
 import {
@@ -39,6 +41,8 @@ import {
   BarChart3,
   Wallet,
   User,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react-native';
 
 // Entry animation for message items
@@ -105,15 +109,15 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
       color: '#8B5CF6'
     },
     {
-      text: "Show my July summary.",
-      desc: "Analyze total spending & category breakdown for July.",
+      text: "Show my recent transactions in GBP",
+      desc: "View recent expense list converted to GBP (£).",
       icon: BarChart3,
       color: '#3B82F6'
     },
     {
-      text: "Increase my food budget to ₹6000 and tell me how much I spent on food last month.",
-      desc: "Update monthly Food budget & check previous spending.",
-      icon: Wallet,
+      text: "Export this list to csv/excel",
+      desc: "Save transactions as CSV/Excel using Settings export feature.",
+      icon: FileSpreadsheet,
       color: '#10B981'
     },
     {
@@ -212,8 +216,10 @@ export default function ChatDashboardScreen() {
   const [sending, setSending] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [expandedCitationsMsgId, setExpandedCitationsMsgId] = useState<Record<string, boolean>>({});
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
+  const userScrolledUpRef = useRef<boolean>(false);
 
   // Initialize and load chat session silently on mount (using user?.id to prevent object ref re-renders)
   useEffect(() => {
@@ -269,14 +275,78 @@ export default function ChatDashboardScreen() {
     }
   }, [conversations, isLoadingConvs, user?.id, activeConversation, initializing]);
 
-  // Scroll to bottom on new messages
+  // Non-blocking auto-scroll: auto-scroll to bottom only if user hasn't manually scrolled up
   useEffect(() => {
-    if (messages.length > 0 || streamingMessageText) {
+    if ((messages.length > 0 || streamingMessageText) && !userScrolledUpRef.current) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 150);
+      }, 100);
     }
   }, [messages, streamingMessageText]);
+
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const isAtBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 90;
+    userScrolledUpRef.current = !isAtBottom;
+    setShowScrollBottomBtn(!isAtBottom);
+  };
+
+  const extractCSVDataFromMessage = (content: string) => {
+    if (!content) return null;
+    const match = content.match(/<!--CSV_DATA:([\s\S]*?)-->/);
+    if (match && match[1]) {
+      try {
+        const parsed = JSON.parse(match[1].trim());
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (err) {
+        console.warn('Failed to parse CSV_DATA tag', err);
+      }
+    }
+    return null;
+  };
+
+  const handleSaveCSV = async (customList?: any[]) => {
+    try {
+      const sourceList = (customList && Array.isArray(customList) && customList.length > 0)
+        ? customList
+        : useExpenseStore.getState().expenses;
+
+      if (!sourceList || sourceList.length === 0) {
+        useAlertStore.getState().showAlert('No Data', 'No transactions found to export.', 'warning');
+        return;
+      }
+
+      const formattedExpenses: any[] = sourceList.map((item: any) => ({
+        id: item.id || `exp-${Math.random().toString(36).substr(2, 9)}`,
+        amount: parseFloat(item.amount) || 0,
+        merchant: item.merchant || item.title || 'Uncategorized',
+        category: item.category || 'General',
+        date: item.date || item.transaction_date || new Date().toISOString().split('T')[0],
+        time: item.time || '12:00',
+        paymentMethod: item.paymentMethod || item.payment_method || 'Card',
+        currency: item.currency || 'INR',
+        tax: item.tax || 0,
+        notes: item.notes || '',
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || new Date().toISOString(),
+        isSynced: 1,
+      }));
+
+      const defaultName = `expenses_export_${new Date().toISOString().split('T')[0]}`;
+      const res = await exportService.saveCSVToCustomLocation(formattedExpenses, defaultName);
+      if (res.success && res.path) {
+        useAlertStore.getState().showAlert(
+          'Export Ready',
+          `Saved ${formattedExpenses.length} transaction(s) to CSV file!\n\nFile Location:\n${res.path}`,
+          'success'
+        );
+      }
+    } catch (err: any) {
+      useAlertStore.getState().showAlert('Export Failed', 'An error occurred while saving CSV file: ' + (err?.message || 'Error'), 'error');
+    }
+  };
 
   const handleSend = async (customQuery?: string) => {
     const query = (customQuery || inputVal).trim();
@@ -284,6 +354,8 @@ export default function ChatDashboardScreen() {
 
     setInputVal('');
     setSending(true);
+    userScrolledUpRef.current = false;
+    setShowScrollBottomBtn(false);
 
     try {
       await sendMessage(query);
@@ -376,7 +448,10 @@ export default function ChatDashboardScreen() {
 
   const renderFormattedMarkdown = (content: string, citationsList: any[]) => {
     if (!content) return null;
-    const codeBlockSplit = content.split(/(```[\s\S]*?```)/g);
+    const cleanContent = content.replace(/<!--CSV_DATA:[\s\S]*?-->/g, '').trim();
+    if (!cleanContent) return null;
+
+    const codeBlockSplit = cleanContent.split(/(```[\s\S]*?```)/g);
 
     return codeBlockSplit.map((block, bIdx) => {
       if (block.startsWith('```')) {
@@ -442,6 +517,7 @@ export default function ChatDashboardScreen() {
     const isUser = item.role === 'user';
     const hasCitations = item.citations && item.citations.length > 0;
     const isCitationsOpen = !!expandedCitationsMsgId[item.id];
+    const csvItems = extractCSVDataFromMessage(item.content);
 
     return (
       <AnimatedMessageItem isUser={isUser}>
@@ -460,6 +536,25 @@ export default function ChatDashboardScreen() {
               <View>
                 {renderFormattedMarkdown(item.content, item.citations)}
                 
+                {csvItems && (
+                  <TouchableOpacity
+                    style={[
+                      styles.minimalExportBtn,
+                      {
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.15)',
+                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#F8FAFC',
+                      },
+                    ]}
+                    onPress={() => handleSaveCSV(csvItems)}
+                    activeOpacity={0.7}
+                  >
+                    <Download size={13} color={isDark ? '#94A3B8' : '#475569'} style={{ marginRight: 6 }} />
+                    <Text style={[styles.minimalExportBtnText, { color: isDark ? '#E2E8F0' : '#334155' }]}>
+                      Save CSV ({csvItems.length} items)
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {hasCitations && (
                   <View style={[styles.citationsContainer, { borderTopColor: colors.border }]}>
                     <TouchableOpacity
@@ -561,41 +656,92 @@ export default function ChatDashboardScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
           style={{ flex: 1 }}
         >
           {messages.length === 0 ? (
             <SuggestionsDeck onSelectSuggestion={(text) => handleSend(text)} />
           ) : (
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              renderItem={renderMessageItem}
-              contentContainerStyle={styles.messagesList}
-              keyboardShouldPersistTaps="handled"
-              ListFooterComponent={
-                isStreaming ? (
-                  <AnimatedMessageItem isUser={false}>
-                    <View style={[styles.messageRow, styles.assistantRow]}>
-                      <View style={[styles.bubble, { backgroundColor: isDark ? '#151D30' : '#FFFFFF', borderColor: colors.border }]}>
-                        {streamingMessageText ? (
-                          renderFormattedMarkdown(streamingMessageText, streamingCitations)
-                        ) : (
-                          <View style={styles.typingIndicator}>
-                            <ActivityIndicator size="small" color={colors.primary} />
-                            <Text style={[styles.typingText, { color: colors.textSecondary }]}>
-                              Searching vector index...
-                            </Text>
-                          </View>
-                        )}
+            <View style={{ flex: 1 }}>
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                renderItem={renderMessageItem}
+                contentContainerStyle={styles.messagesList}
+                keyboardShouldPersistTaps="handled"
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                ListFooterComponent={
+                  isStreaming ? (
+                    <AnimatedMessageItem isUser={false}>
+                      <View style={[styles.messageRow, styles.assistantRow]}>
+                        <View style={[styles.bubble, { backgroundColor: isDark ? '#151D30' : '#FFFFFF', borderColor: colors.border }]}>
+                          {streamingMessageText ? (
+                            <View>
+                              {renderFormattedMarkdown(streamingMessageText, streamingCitations)}
+                              {(() => {
+                                const streamCsvItems = extractCSVDataFromMessage(streamingMessageText);
+                                if (!streamCsvItems) return null;
+                                return (
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.minimalExportBtn,
+                                      {
+                                        borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.15)',
+                                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#F8FAFC',
+                                      },
+                                    ]}
+                                    onPress={() => handleSaveCSV(streamCsvItems)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Download size={13} color={isDark ? '#94A3B8' : '#475569'} style={{ marginRight: 6 }} />
+                                    <Text style={[styles.minimalExportBtnText, { color: isDark ? '#E2E8F0' : '#334155' }]}>
+                                      Save CSV ({streamCsvItems.length} items)
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })()}
+                            </View>
+                          ) : (
+                            <View style={styles.typingIndicator}>
+                              <ActivityIndicator size="small" color={colors.primary} />
+                              <Text style={[styles.typingText, { color: colors.textSecondary }]}>
+                                Searching vector index...
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  </AnimatedMessageItem>
-                ) : null
-              }
-            />
+                    </AnimatedMessageItem>
+                  ) : null
+                }
+              />
+
+              {showScrollBottomBtn && (
+                <TouchableOpacity
+                  style={[
+                    styles.jumpToBottomBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      shadowColor: colors.primary,
+                    },
+                  ]}
+                  onPress={() => {
+                    userScrolledUpRef.current = false;
+                    setShowScrollBottomBtn(false);
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <ChevronDown size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.jumpToBottomText}>
+                    {isStreaming ? 'Streaming response... Jump to bottom' : 'Jump to bottom'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
 
           {/* Input Bar */}
@@ -945,5 +1091,39 @@ const styles = StyleSheet.create({
   botHeroWrapper: {
     marginBottom: 12,
     alignItems: 'center',
+  },
+  minimalExportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  minimalExportBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  jumpToBottomBtn: {
+    position: 'absolute',
+    bottom: 14,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 100,
+  },
+  jumpToBottomText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
