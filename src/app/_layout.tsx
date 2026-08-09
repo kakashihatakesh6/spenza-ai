@@ -301,7 +301,7 @@ function RootLayoutNav() {
           options={{ 
             presentation: 'modal',
             headerShown: true,
-            title: 'Set Budgets',
+            title: 'Manage Budget',
             headerStyle: {
               backgroundColor: colors.card,
             },
