@@ -4,6 +4,7 @@ import {
   Text,
   View,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Alert,
   Platform,
@@ -28,7 +29,7 @@ import { Skeleton } from '../components/Skeleton';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Edit2, Trash2, Plus, Calendar as CalendarIcon, RotateCcw, X, Check, ArrowRight } from 'lucide-react-native';
 import { TransactionDetailModal } from '../components/TransactionDetailModal';
-import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInUp, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInUp, FadeOut, FadeOutUp } from 'react-native-reanimated';
 import { Expense } from '../types';
 
 const CATEGORY_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
@@ -65,13 +66,6 @@ export const TransactionsScreen = () => {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
 
-
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-  
   const { expenses, categories, fetchExpenses, deleteExpense, isLoading } = useExpenseStore();
   const { settings } = useSettingsStore();
 
@@ -369,17 +363,38 @@ export const TransactionsScreen = () => {
 
   const renderCategoryDropdown = () => {
     if (!showCategoryPills) return null;
+    if (isLoading) {
+      return (
+        <Animated.View
+          entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+          exiting={FadeOutUp.duration(180)}
+          style={styles.dropdownContainer}
+        >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.categoryCard,
+                  {
+                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.9)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+                  },
+                ]}
+              >
+                <Skeleton width={26} height={26} borderRadius={13} style={{ marginRight: 6 }} />
+                <Skeleton width={45 + (idx % 3) * 15} height={14} borderRadius={6} />
+              </View>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      );
+    }
     return (
       <Animated.View 
-        entering={FadeInDown.duration(220)}
-        exiting={FadeOut.duration(180)}
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
       >
         <FlatList
           horizontal
@@ -387,14 +402,14 @@ export const TransactionsScreen = () => {
           data={[{ id: 'all', name: 'All' }, ...categories]}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.categoryScroll}
-          renderItem={({ item, index }) => {
+          renderItem={({ item }) => {
             const isSelected = item.name === 'All' ? selectedCategory === null : selectedCategory === item.name;
             const styleInfo = getCategoryStyle(item.name);
             const displayColor = isDark ? '#818CF8' : styleInfo.color;
             const displayBg = isDark ? 'rgba(30, 41, 59, 0.6)' : styleInfo.bg;
 
             return (
-              <Animated.View entering={FadeIn.duration(200).delay(index * 25)}>
+              <View key={item.id}>
                 <TouchableOpacity
                   style={[
                     styles.categoryCard,
@@ -432,7 +447,7 @@ export const TransactionsScreen = () => {
                     {item.name}
                   </Text>
                 </TouchableOpacity>
-              </Animated.View>
+              </View>
             );
           }}
         />
@@ -459,21 +474,15 @@ export const TransactionsScreen = () => {
 
     return (
       <Animated.View 
-        entering={FadeInDown.duration(220)}
-        exiting={FadeOut.duration(180)}
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
       >
         <View style={styles.sortOptionsGrid}>
-          {ranges.map((opt, index) => {
+          {ranges.map((opt) => {
             const isSelected = dateRange === opt.value;
             return (
-              <Animated.View key={opt.value} entering={FadeIn.duration(200).delay(index * 25)}>
+              <View key={opt.value}>
                 <TouchableOpacity
                   style={[
                     styles.sortOptItem,
@@ -521,7 +530,7 @@ export const TransactionsScreen = () => {
                     </View>
                   )}
                 </TouchableOpacity>
-              </Animated.View>
+              </View>
             );
           })}
         </View>
@@ -533,15 +542,9 @@ export const TransactionsScreen = () => {
     if (!showSortOptions) return null;
     return (
       <Animated.View 
-        entering={FadeInDown.duration(220)}
-        exiting={FadeOut.duration(180)}
-        style={[
-          styles.dropdownContainer, 
-          { 
-            backgroundColor: isDark ? 'rgba(21, 29, 48, 0.65)' : 'rgba(255, 255, 255, 0.75)', 
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' 
-          }
-        ]}
+        entering={FadeInDown.duration(240).springify().damping(22).stiffness(220)}
+        exiting={FadeOutUp.duration(180)}
+        style={styles.dropdownContainer}
       >
         <View style={styles.sortOptionsGrid}>
           {[
@@ -549,10 +552,10 @@ export const TransactionsScreen = () => {
             { label: 'Date: Oldest', value: 'date-asc', icon: 'arrow-up' },
             { label: 'Amount: High to Low', value: 'amount-desc', icon: 'trending-down' },
             { label: 'Amount: Low to High', value: 'amount-asc', icon: 'trending-up' },
-          ].map((opt, index) => {
+          ].map((opt) => {
             const isSelected = sortBy === opt.value;
             return (
-              <Animated.View key={opt.value} entering={FadeIn.duration(200).delay(index * 25)}>
+              <View key={opt.value}>
                 <TouchableOpacity
                   style={[
                     styles.sortOptItem,
@@ -588,7 +591,7 @@ export const TransactionsScreen = () => {
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
-              </Animated.View>
+              </View>
             );
           })}
         </View>
@@ -735,99 +738,112 @@ export const TransactionsScreen = () => {
           onBackPress={() => router.back()}
         />
 
-        <Animated.View entering={SlideInUp.duration(400)} style={styles.searchFilterRow}>
-          {/* Unified search input in the row */}
-          <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)', borderWidth: 1 }]}>
-            <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search transactions..."
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Search transactions input"
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')} style={styles.clearSearchBtn}>
-                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+        <View style={styles.searchFilterRow}>
+          {isLoading ? (
+            <>
+              <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)', borderWidth: 1 }]}>
+                <Skeleton width="60%" height={16} borderRadius={4} />
+              </View>
+              <Skeleton width={46} height={46} borderRadius={14} />
+              <Skeleton width={46} height={46} borderRadius={14} />
+              <Skeleton width={46} height={46} borderRadius={14} />
+            </>
+          ) : (
+            <>
+              {/* Unified search input in the row */}
+              <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)', borderWidth: 1 }]}>
+                <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.text }]}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search transaction"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Search transactions input"
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch('')} style={styles.clearSearchBtn}>
+                    <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Date Range Trigger Button */}
+              <TouchableOpacity
+                style={[
+                  styles.iconFilterBtn,
+                  { 
+                    backgroundColor: dateRange !== 'all' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                    borderColor: dateRange !== 'all' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                    borderWidth: 1
+                  }
+                ]}
+                onPress={toggleDateRangePicker}
+                activeOpacity={0.7}
+                accessibilityLabel="Filter by date range trigger"
+              >
+                <Ionicons 
+                  name="calendar" 
+                  size={18} 
+                  color={dateRange !== 'all' ? colors.primary : colors.textSecondary} 
+                />
+                {dateRange !== 'all' && (
+                  <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
+                )}
               </TouchableOpacity>
-            )}
-          </View>
 
-          {/* Date Range Trigger Button */}
-          <TouchableOpacity
-            style={[
-              styles.iconFilterBtn,
-              { 
-                backgroundColor: dateRange !== 'all' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
-                borderColor: dateRange !== 'all' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
-                borderWidth: 1
-              }
-            ]}
-            onPress={toggleDateRangePicker}
-            activeOpacity={0.7}
-            accessibilityLabel="Filter by date range trigger"
-          >
-            <Ionicons 
-              name="calendar" 
-              size={18} 
-              color={dateRange !== 'all' ? colors.primary : colors.textSecondary} 
-            />
-            {dateRange !== 'all' && (
-              <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
-            )}
-          </TouchableOpacity>
+              {/* Category Trigger Button */}
+              <TouchableOpacity
+                style={[
+                  styles.iconFilterBtn,
+                  { 
+                    backgroundColor: selectedCategory ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                    borderColor: selectedCategory ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                    borderWidth: 1
+                  }
+                ]}
+                onPress={toggleCategoryPills}
+                activeOpacity={0.7}
+                accessibilityLabel="Filter by category trigger"
+              >
+                <Feather 
+                  name={selectedCategory ? (getCategoryIcon(selectedCategory) as any) : "tag"} 
+                  size={18} 
+                  color={selectedCategory ? colors.primary : colors.textSecondary} 
+                />
+                {selectedCategory && (
+                  <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
+                )}
+              </TouchableOpacity>
 
-          {/* Category Trigger Button */}
-          <TouchableOpacity
-            style={[
-              styles.iconFilterBtn,
-              { 
-                backgroundColor: selectedCategory ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
-                borderColor: selectedCategory ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
-                borderWidth: 1
-              }
-            ]}
-            onPress={toggleCategoryPills}
-            activeOpacity={0.7}
-            accessibilityLabel="Filter by category trigger"
-          >
-            <Feather 
-              name={selectedCategory ? (getCategoryIcon(selectedCategory) as any) : "tag"} 
-              size={18} 
-              color={selectedCategory ? colors.primary : colors.textSecondary} 
-            />
-            {selectedCategory && (
-              <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
-            )}
-          </TouchableOpacity>
-
-          {/* Sort Option Trigger Button */}
-          <TouchableOpacity
-            style={[
-              styles.iconFilterBtn,
-              { 
-                backgroundColor: sortBy !== 'date-desc' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
-                borderColor: sortBy !== 'date-desc' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
-                borderWidth: 1
-              }
-            ]}
-            onPress={toggleSortOptions}
-            activeOpacity={0.7}
-            accessibilityLabel="Sort options trigger"
-          >
-            <Feather 
-              name="sliders" 
-              size={18} 
-              color={sortBy !== 'date-desc' ? colors.primary : colors.textSecondary} 
-            />
-            {sortBy !== 'date-desc' && (
-              <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+              {/* Sort Option Trigger Button */}
+              <TouchableOpacity
+                style={[
+                  styles.iconFilterBtn,
+                  { 
+                    backgroundColor: sortBy !== 'date-desc' ? colors.primaryLight : (isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(255, 255, 255, 0.7)'),
+                    borderColor: sortBy !== 'date-desc' ? colors.primary : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'),
+                    borderWidth: 1
+                  }
+                ]}
+                onPress={toggleSortOptions}
+                activeOpacity={0.7}
+                accessibilityLabel="Sort options trigger"
+              >
+                <Feather 
+                  name="sliders" 
+                  size={18} 
+                  color={sortBy !== 'date-desc' ? colors.primary : colors.textSecondary} 
+                />
+                {sortBy !== 'date-desc' && (
+                  <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
 
         {renderDateRangeDropdown()}
         {renderSortDropdown()}
@@ -835,7 +851,26 @@ export const TransactionsScreen = () => {
 
         {isLoading ? (
           <View style={styles.listContainer}>
-            <View style={{ height: 20 }} />
+            <View style={{ height: 12 }} />
+
+            {/* Monthly Summary Skeleton */}
+            <View style={[styles.monthlySummarySkeleton, { backgroundColor: colors.card }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Skeleton width={130} height={14} borderRadius={4} />
+                <Skeleton width={65} height={20} borderRadius={10} />
+              </View>
+              <Skeleton width={160} height={28} borderRadius={6} />
+            </View>
+
+            {/* Category Pills Skeleton (Opened Category Row) */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              <Skeleton width={70} height={34} borderRadius={14} />
+              <Skeleton width={90} height={34} borderRadius={14} />
+              <Skeleton width={80} height={34} borderRadius={14} />
+              <Skeleton width={85} height={34} borderRadius={14} />
+            </View>
+
+            {/* Transaction List Card Skeletons */}
             {Array.from({ length: 4 }).map((_, idx) => (
               <View key={idx} style={[styles.cardSkeleton, { backgroundColor: colors.card }]}>
                 <Skeleton width={44} height={44} borderRadius={22} style={{ marginRight: 12 }} />
@@ -954,9 +989,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   dropdownContainer: {
-    borderBottomWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     zIndex: 10,
+    backgroundColor: 'transparent',
   },
   categoryScroll: {
     paddingHorizontal: 16,
@@ -1010,6 +1045,22 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     fontWeight: '900',
     letterSpacing: 0.5,
+  },
+  monthlySummarySkeleton: {
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   listContainer: {
     flex: 1,

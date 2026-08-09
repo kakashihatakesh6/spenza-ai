@@ -32,15 +32,7 @@ import {
   Globe as GoogleIcon,
 } from 'lucide-react-native';
 
-interface SessionItem {
-  id: string;
-  device: string;
-  location: string;
-  ip: string;
-  time: string;
-  isCurrent: boolean;
-  type: 'mobile' | 'desktop';
-}
+import { SessionItem } from '../../services/session.service';
 
 export default function SecurityScreen() {
   const router = useRouter();
@@ -66,41 +58,24 @@ export default function SecurityScreen() {
   const provider = user?.app_metadata?.provider || (user?.app_metadata?.providers?.[0]);
   const isGoogleUser = provider === 'google';
 
-  const [sessions, setSessions] = useState<SessionItem[]>([
-    {
-      id: '1',
-      device: 'iPhone 15 Pro (Current)',
-      location: 'Mumbai, India',
-      ip: '192.168.1.42',
-      time: 'Active now',
-      isCurrent: true,
-      type: 'mobile',
-    },
-    {
-      id: '2',
-      device: 'macOS Chrome Browser',
-      location: 'Mumbai, India',
-      ip: '103.88.22.12',
-      time: '2 hours ago',
-      isCurrent: false,
-      type: 'desktop',
-    },
-    {
-      id: '3',
-      device: 'Windows Edge Browser',
-      location: 'Delhi, India',
-      ip: '49.36.88.94',
-      time: '3 days ago',
-      isCurrent: false,
-      type: 'desktop',
-    },
-  ]);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
   useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      setIsLoadingSessions(true);
+      const activeSessions = await authService.getActiveSessions();
+      setSessions(activeSessions);
+    } catch (err) {
+      logger.error('Failed to load active sessions', err);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
 
   const handleUpdatePassword = async () => {
     // Validation
@@ -164,14 +139,59 @@ export default function SecurityScreen() {
         {
           text: 'Sign Out All',
           style: 'destructive',
-          onPress: () => {
-            setSessions(prev => prev.filter(s => s.isCurrent));
-            useAlertStore.getState().showAlert('Success', 'Successfully terminated all other sessions.', 'success');
+          onPress: async () => {
+            try {
+              setIsLoadingSessions(true);
+              await authService.signOutOthers();
+              const updated = await authService.getActiveSessions();
+              setSessions(updated);
+              useAlertStore.getState().showAlert('Success', 'Successfully terminated all other sessions.', 'success');
+            } catch (err: any) {
+              logger.error('Failed to terminate other sessions', err);
+              useAlertStore.getState().showAlert('Error', err?.message || 'Failed to terminate sessions.', 'error');
+            } finally {
+              setIsLoadingSessions(false);
+            }
           },
         },
       ]
     );
   };
+
+  const terminateSingleSession = (session: SessionItem) => {
+    useAlertStore.getState().showAlert(
+      'Terminate Session',
+      `Sign out from ${session.device}?`,
+      'warning',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Terminate',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoadingSessions(true);
+              await authService.terminateSession(session.id);
+              if (session.isCurrent) {
+                useAlertStore.getState().showAlert('Signed Out', 'You have been signed out of this device.', 'info');
+                router.replace('/auth/login');
+              } else {
+                const updated = await authService.getActiveSessions();
+                setSessions(updated);
+                useAlertStore.getState().showAlert('Success', `Terminated session on ${session.device}.`, 'success');
+              }
+            } catch (err: any) {
+              logger.error('Failed to terminate session', err);
+              useAlertStore.getState().showAlert('Error', err?.message || 'Failed to terminate session.', 'error');
+            } finally {
+              setIsLoadingSessions(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
   const getPlatformIcon = (type: string) => {
     if (type === 'mobile') {
@@ -339,43 +359,67 @@ export default function SecurityScreen() {
             Active Login Devices ({sessions.length})
           </Text>
           {sessions.length > 1 && (
-            <TouchableOpacity onPress={terminateOtherSessions}>
+            <TouchableOpacity onPress={terminateOtherSessions} disabled={isLoadingSessions}>
               <Text style={[styles.actionLinkText, { color: colors.danger }]}>Sign Out Others</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 8 }]}>
-          {sessions.map((session, index) => (
-            <View key={session.id}>
-              {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 6 }]} />}
-              <View style={styles.sessionItem}>
-                <View style={[styles.sessionIconBg, { backgroundColor: colors.primaryLight }]}>
-                  {getPlatformIcon(session.type)}
-                </View>
-                
-                <View style={styles.sessionDetails}>
-                  <View style={styles.sessionTitleRow}>
-                    <Text style={[styles.sessionDevice, { color: colors.text }]}>
-                      {session.device}
-                    </Text>
-                    {session.isCurrent && (
-                      <View style={[styles.currentBadge, { backgroundColor: colors.success + '20' }]}>
-                        <Text style={[styles.currentBadgeText, { color: colors.success }]}>CURRENT</Text>
-                      </View>
-                    )}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 12 }]}>
+          {isLoadingSessions ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 8 }}>
+                Loading active sessions...
+              </Text>
+            </View>
+          ) : sessions.length === 0 ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: colors.textSecondary }}>No active sessions found.</Text>
+            </View>
+          ) : (
+            sessions.map((session, index) => (
+              <View key={session.id}>
+                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 8 }]} />}
+                <View style={styles.sessionItem}>
+                  <View style={[styles.sessionIconBg, { backgroundColor: colors.primaryLight }]}>
+                    {getPlatformIcon(session.type)}
                   </View>
-                  <Text style={[styles.sessionSub, { color: colors.textSecondary }]}>
-                    {session.location} • {session.ip}
-                  </Text>
-                  <Text style={[styles.sessionTime, { color: colors.textSecondary }]}>
-                    {session.time}
-                  </Text>
+                  
+                  <View style={styles.sessionDetails}>
+                    <View style={styles.sessionTitleRow}>
+                      <Text style={[styles.sessionDevice, { color: colors.text }]}>
+                        {session.device}
+                      </Text>
+                      {session.isCurrent && (
+                        <View style={[styles.currentBadge, { backgroundColor: colors.success + '20' }]}>
+                          <Text style={[styles.currentBadgeText, { color: colors.success }]}>CURRENT</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.sessionSub, { color: colors.textSecondary }]}>
+                      {session.location} • {session.ip}
+                    </Text>
+                    <Text style={[styles.sessionTime, { color: colors.textSecondary }]}>
+                      {session.time}
+                    </Text>
+                  </View>
+
+                  {!session.isCurrent && (
+                    <TouchableOpacity
+                      onPress={() => terminateSingleSession(session)}
+                      style={{ padding: 6 }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Trash2 size={16} color={colors.danger} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
+
 
         <View style={{ height: 40 }} />
       </ScrollView>

@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { logger } from './logger';
+import { sessionService, SessionItem } from './session.service';
 
 // Allow OAuth redirects to be completed
 WebBrowser.maybeCompleteAuthSession();
@@ -15,6 +16,9 @@ export const authService = {
       password,
     });
     if (error) throw error;
+    if (data?.session) {
+      await sessionService.registerCurrentDevice();
+    }
     return data;
   },
 
@@ -25,8 +29,12 @@ export const authService = {
       password,
     });
     if (error) throw error;
+    if (data?.session) {
+      await sessionService.registerCurrentDevice();
+    }
     return data;
   },
+
 
   // Google Sign-In (OAuth Flow via expo-web-browser)
   async signInWithGoogle() {
@@ -135,9 +143,10 @@ export const authService = {
     }
   },
 
-  // Logout
+  // Logout (Local device only - leaves other devices logged in)
   async signOut() {
-    const { error } = await supabase.auth.signOut();
+    await sessionService.unregisterCurrentDevice().catch(() => {});
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) throw error;
   },
 
@@ -201,4 +210,18 @@ export const authService = {
   async getCurrentUser() {
     return this.getUser();
   },
+
+  // Session Management
+  async getActiveSessions() {
+    return sessionService.getActiveSessions();
+  },
+
+  async signOutOthers() {
+    return sessionService.terminateOtherSessions();
+  },
+
+  async terminateSession(sessionId: string) {
+    return sessionService.terminateSession(sessionId);
+  },
 };
+

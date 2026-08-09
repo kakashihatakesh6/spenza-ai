@@ -69,12 +69,6 @@ export default function EditProfileScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   const handleMonthlyIncomeChange = (val: string) => {
     setMonthlyIncome(val);
     const num = Number(val);
