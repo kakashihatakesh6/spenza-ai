@@ -106,15 +106,16 @@ export default function OCRScanModal() {
   const blinkOpacity = useRef(new Animated.Value(0)).current;
 
   const triggerShutterPressAnimation = () => {
+    shutterScale.setValue(1);
     Animated.sequence([
       Animated.timing(shutterScale, {
-        toValue: 0.82,
-        duration: 80,
+        toValue: 0.86,
+        duration: 90,
         useNativeDriver: true,
       }),
       Animated.timing(shutterScale, {
         toValue: 1,
-        duration: 120,
+        duration: 110,
         useNativeDriver: true,
       }),
     ]).start();
@@ -124,13 +125,13 @@ export default function OCRScanModal() {
     blinkOpacity.setValue(0);
     Animated.sequence([
       Animated.timing(blinkOpacity, {
-        toValue: 0.85,
-        duration: 60,
+        toValue: 0.75,
+        duration: 70,
         useNativeDriver: true,
       }),
       Animated.timing(blinkOpacity, {
         toValue: 0,
-        duration: 100,
+        duration: 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -203,23 +204,19 @@ export default function OCRScanModal() {
   }, []);
 
   const capturePhoto = async (demoPreset?: string) => {
-    // 1. Immediately trigger haptic click feedback for native tactile feel
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {
-      // Non-fatal if device doesn't support haptics
-    }
+    // 1. Guard against re-entry / double taps
+    if (isCapturing) return;
 
-    // 2. Fire button press shrink-grow animation and screen shutter blink overlay
-    triggerShutterPressAnimation();
-    triggerShutterBlink();
-
-    // 3. Mark state as capturing immediately to block further clicks
     setIsCapturing(true);
 
+    // 2. Tactile haptics & single smooth shutter press animation
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {}
+
+    triggerShutterPressAnimation();
+
     if (demoPreset) {
-      // Simulate brief delay for mock selection
-      await new Promise((resolve) => setTimeout(resolve, 300));
       setPhotoUri(`mock_${demoPreset}.jpg`);
       setPresetName(demoPreset);
       setIsCapturing(false);
@@ -227,8 +224,7 @@ export default function OCRScanModal() {
     }
 
     if (!Device.isDevice) {
-      // Simulation Mode: pick random preset after a quick delay
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 300));
       const presets = ['starbucks', 'walmart', 'shell', 'amazon', 'vmart'];
       const randomPreset = presets[Math.floor(Math.random() * presets.length)];
       setPhotoUri(`mock_${randomPreset}.jpg`);
@@ -239,10 +235,7 @@ export default function OCRScanModal() {
 
     if (cameraRef.current) {
       try {
-        // Give camera hardware a slightly smaller stabilized focus delay
-        // Having animations and spinner active makes this delay feel smooth rather than frozen.
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, skipProcessing: true });
         setPhotoUri(photo.uri);
         setPresetName(undefined);
       } catch (captureError: any) {
@@ -415,19 +408,6 @@ export default function OCRScanModal() {
             </View>
           )}
 
-          {/* Shutter blink overlay for flash feedback */}
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                backgroundColor: '#FFF',
-                opacity: blinkOpacity,
-                zIndex: 15,
-              },
-            ]}
-            pointerEvents="none"
-          />
-
           {/* Viewfinder Header Overlays */}
           <View style={styles.headerControls}>
             <TouchableOpacity 
@@ -483,13 +463,9 @@ export default function OCRScanModal() {
                 disabled={!isCameraReady || isCapturing}
                 activeOpacity={0.9}
               >
-                {isCapturing ? (
-                  <View style={[styles.shutterBtnInner, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
-                    <ActivityIndicator size="small" color="#0F172A" />
-                  </View>
-                ) : (
-                  <View style={styles.shutterBtnInner} />
-                )}
+                <View style={[styles.shutterBtnInner, isCapturing && { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                  {isCapturing && <ActivityIndicator size="small" color="#0F172A" />}
+                </View>
               </TouchableOpacity>
             </Animated.View>
 

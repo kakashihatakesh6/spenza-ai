@@ -71,17 +71,21 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
   },
 
   fetchBudgets: async () => {
-    set({ isLoading: true });
     try {
-      const user = useAuthStore.getState().user;
-      if (user) {
-        const remoteBudgets = await budgetService.getBudgets();
-        set({ budgets: remoteBudgets, isLoading: false });
-      } else {
-        set({ budgets: [], isLoading: false });
+      // 1. Instantly load cached budgets from local storage / SQLite
+      const localBudgets = expenseRepository.getAllBudgets();
+      set({ budgets: localBudgets });
+
+      // 2. Fetch remote budgets from Supabase if user session is active
+      const remoteBudgets = await budgetService.getBudgets();
+      if (remoteBudgets && remoteBudgets.length > 0) {
+        remoteBudgets.forEach((b) => expenseRepository.saveBudget(b));
+        set({ budgets: remoteBudgets });
       }
-    } catch {
-      set({ budgets: [], isLoading: false });
+    } catch (error) {
+      logger.error('Error fetching budgets', error);
+      const localBudgets = expenseRepository.getAllBudgets();
+      set({ budgets: localBudgets });
     }
   },
 
@@ -208,36 +212,46 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
 
   saveBudget: async (budget) => {
     try {
+      // 1. Save locally to SQLite / localStorage
+      expenseRepository.saveBudget(budget);
+
+      set((state) => {
+        const index = state.budgets.findIndex((b) => b.id === budget.id);
+        const updatedBudgets = [...state.budgets];
+        if (index > -1) {
+          updatedBudgets[index] = budget;
+        } else {
+          updatedBudgets.push(budget);
+        }
+        return { budgets: updatedBudgets };
+      });
+
+      // 2. Sync to Supabase cloud if user authenticated
       const user = useAuthStore.getState().user;
       if (user) {
-        const remoteBudget = await budgetService.saveBudget(budget, user.id);
-        
-        set((state) => {
-          const index = state.budgets.findIndex((b) => b.id === budget.id);
-          if (index > -1) {
-            const updatedBudgets = [...state.budgets];
-            updatedBudgets[index] = remoteBudget;
-            return { budgets: updatedBudgets };
-          } else {
-            return { budgets: [...state.budgets, remoteBudget] };
-          }
-        });
+        await budgetService.saveBudget(budget, user.id);
       }
     } catch (error: any) {
+      logger.error('Error saving budget', error);
       throw error;
     }
   },
 
   deleteBudget: async (id) => {
     try {
+      // 1. Delete locally from SQLite / localStorage
+      expenseRepository.deleteBudget(id);
+      set((state) => ({
+        budgets: state.budgets.filter((b) => b.id !== id),
+      }));
+
+      // 2. Sync to Supabase cloud if user authenticated
       const user = useAuthStore.getState().user;
       if (user) {
         await budgetService.deleteBudget(id);
-        set((state) => ({
-          budgets: state.budgets.filter((b) => b.id !== id),
-        }));
       }
     } catch (error: any) {
+      logger.error('Error deleting budget', error);
       throw error;
     }
   },

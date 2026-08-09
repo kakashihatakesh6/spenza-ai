@@ -172,6 +172,7 @@ export const expenseRepository = {
         notificationMinute: settingsMap.notificationMinute !== undefined ? Number(settingsMap.notificationMinute) : 0,
         budgetWarningEnabled: settingsMap.budgetWarningEnabled === undefined ? true : (settingsMap.budgetWarningEnabled === 'true' || settingsMap.budgetWarningEnabled === true),
         budgetWarningThreshold: settingsMap.budgetWarningThreshold !== undefined ? Number(settingsMap.budgetWarningThreshold) : 80,
+        biometricsEnabled: settingsMap.biometricsEnabled === 'true' || settingsMap.biometricsEnabled === true,
       };
     }
 
@@ -184,6 +185,7 @@ export const expenseRepository = {
       notificationMinute: 0,
       budgetWarningEnabled: true,
       budgetWarningThreshold: 80,
+      biometricsEnabled: false,
     };
 
     if (!db) return settings;
@@ -205,6 +207,8 @@ export const expenseRepository = {
         settings.budgetWarningEnabled = row.value === 'true';
       } else if (row.key === 'budgetWarningThreshold') {
         settings.budgetWarningThreshold = Number(row.value);
+      } else if (row.key === 'biometricsEnabled') {
+        settings.biometricsEnabled = row.value === 'true';
       }
     });
 

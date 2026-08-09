@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import { useRouter, useNavigation } from 'expo-router';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Calendar as RNCalendar, DateData } from 'react-native-calendars';
 import { useExpenseStore } from '../store/expenseStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -404,9 +404,11 @@ export const TransactionsScreen = () => {
           contentContainerStyle={styles.categoryScroll}
           renderItem={({ item }) => {
             const isSelected = item.name === 'All' ? selectedCategory === null : selectedCategory === item.name;
-            const styleInfo = getCategoryStyle(item.name);
-            const displayColor = isDark ? '#818CF8' : styleInfo.color;
-            const displayBg = isDark ? 'rgba(30, 41, 59, 0.6)' : styleInfo.bg;
+            const catMeta = item.name === 'All'
+              ? { color: colors.primary, icon: 'apps' }
+              : expenseHelpers.getCategoryMeta(item.name, categories);
+            const displayColor = catMeta.color;
+            const displayBg = isDark ? 'rgba(255, 255, 255, 0.08)' : catMeta.color + '20';
 
             return (
               <View key={item.id}>
@@ -429,12 +431,12 @@ export const TransactionsScreen = () => {
                   <View 
                     style={[
                       styles.categoryIconBadge, 
-                      { backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : displayBg }
+                      { backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : displayBg }
                     ]}
                   >
-                    <Feather 
-                      name={styleInfo.icon as any} 
-                      size={13} 
+                    <MaterialCommunityIcons 
+                      name={catMeta.icon as any} 
+                      size={14} 
                       color={isSelected ? '#FFFFFF' : displayColor} 
                     />
                   </View>

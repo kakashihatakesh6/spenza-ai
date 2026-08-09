@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { Home, Receipt, TrendingUp, Settings as SettingsIcon } from 'lucide-react-native';
@@ -31,6 +32,10 @@ const CustomTabBarButton = ({ children, onPress }: any) => {
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 12 : 8);
+  const tabHeight = 60 + bottomPadding;
 
   return (
     <Tabs
@@ -53,9 +58,10 @@ export default function TabsLayout() {
           backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: isDark ? '#1E293B' : '#EAEAEA',
-          height: 72,
-          paddingBottom: 10,
-          paddingTop: 10,
+          height: tabHeight,
+          paddingBottom: bottomPadding,
+          paddingTop: 8,
+          elevation: 8,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,

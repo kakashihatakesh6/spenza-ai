@@ -12,6 +12,7 @@ interface SettingsState {
   setNotificationTime: (hour: number, minute: number) => void;
   setBudgetWarningEnabled: (enabled: boolean) => void;
   setBudgetWarningThreshold: (threshold: number) => void;
+  setBiometricsEnabled: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -23,6 +24,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     notificationMinute: 0,
     budgetWarningEnabled: true,
     budgetWarningThreshold: 80,
+    biometricsEnabled: false,
   },
   fetchSettings: () => {
     try {
@@ -95,6 +97,17 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       logger.info('Settings saved');
     } catch (error) {
       logger.error('Error saving budgetWarningThreshold setting', error);
+    }
+  },
+  setBiometricsEnabled: (enabled) => {
+    try {
+      expenseRepository.saveSetting('biometricsEnabled', String(enabled));
+      set((state) => ({
+        settings: { ...state.settings, biometricsEnabled: enabled },
+      }));
+      logger.info(enabled ? 'Biometrics security enabled' : 'Biometrics security disabled');
+    } catch (error) {
+      logger.error('Error saving biometricsEnabled setting', error);
     }
   },
 }));

@@ -37,6 +37,7 @@ export interface Settings {
   notificationMinute: number;
   budgetWarningEnabled: boolean;
   budgetWarningThreshold: number;
+  biometricsEnabled: boolean;
 }
 
 export interface SpendingInsight {

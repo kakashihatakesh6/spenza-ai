@@ -18,6 +18,8 @@ interface NotificationState {
   markAllAsRead: () => void;
   clearAll: () => void;
   toggleRead: (id: string) => void;
+  markAsRead: (id: string) => void;
+  deleteNotification: (id: string) => void;
   loadNotifications: () => Promise<void>;
 }
 
@@ -77,6 +79,28 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       );
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
         logger.warn('Failed to toggle notification in AsyncStorage', e)
+      );
+      return { notifications: updated };
+    });
+  },
+
+  markAsRead: (id: string) => {
+    set((state) => {
+      const updated = state.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      );
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
+        logger.warn('Failed to mark notification as read in AsyncStorage', e)
+      );
+      return { notifications: updated };
+    });
+  },
+
+  deleteNotification: (id: string) => {
+    set((state) => {
+      const updated = state.notifications.filter((n) => n.id !== id);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
+        logger.warn('Failed to delete notification from AsyncStorage', e)
       );
       return { notifications: updated };
     });

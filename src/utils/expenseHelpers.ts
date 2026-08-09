@@ -240,4 +240,185 @@ export const expenseHelpers = {
 
     return insights;
   },
+
+  getYearlyTrendData(expenses: Expense[]): { month: string; amount: number }[] {
+    const currentYear = new Date().getFullYear();
+    const result: { month: string; amount: number }[] = [];
+    const convert = useCurrencyStore.getState().convert;
+
+    // Provide 5 year trend (currentYear - 4 to currentYear)
+    for (let yr = currentYear - 4; yr <= currentYear; yr++) {
+      const yrStr = yr.toString();
+      const yrSpend = expenses
+        .filter((e) => e.date.startsWith(yrStr))
+        .reduce((sum, e) => {
+          const amt = convert(Number(e.amount), e.currency || 'INR', 'INR');
+          return sum + amt;
+        }, 0);
+
+      result.push({ month: yrStr, amount: yrSpend });
+    }
+
+    return result;
+  },
+
+  getPaymentMethodBreakdown(expenses: Expense[]): { method: string; amount: number; percentage: number; count: number; icon: string }[] {
+    const convert = useCurrencyStore.getState().convert;
+    const total = expenses.reduce((sum, e) => sum + convert(Number(e.amount), e.currency || 'INR', 'INR'), 0);
+
+    const ALL_METHODS = ['UPI', 'Cash', 'Debit Card', 'Credit Card', 'Online (Netbanking)', 'Other'];
+    const map: Record<string, { total: number; count: number }> = {
+      'UPI': { total: 0, count: 0 },
+      'Cash': { total: 0, count: 0 },
+      'Debit Card': { total: 0, count: 0 },
+      'Credit Card': { total: 0, count: 0 },
+      'Online (Netbanking)': { total: 0, count: 0 },
+      'Other': { total: 0, count: 0 },
+    };
+
+    expenses.forEach((e) => {
+      const pm = (e.paymentMethod || '').trim();
+      const lower = pm.toLowerCase();
+      let key = 'Other';
+
+      if (lower.includes('upi')) key = 'UPI';
+      else if (lower.includes('cash')) key = 'Cash';
+      else if (lower.includes('debit')) key = 'Debit Card';
+      else if (lower.includes('credit')) key = 'Credit Card';
+      else if (lower.includes('netbank') || lower.includes('online') || lower.includes('banking')) key = 'Online (Netbanking)';
+      else if (lower.includes('card')) key = 'Debit Card';
+      else key = 'Other';
+
+      const amt = convert(Number(e.amount), e.currency || 'INR', 'INR');
+      map[key].total += amt;
+      map[key].count += 1;
+    });
+
+    return ALL_METHODS.map((method) => {
+      const amount = map[method].total;
+      return {
+        method,
+        amount,
+        percentage: total > 0 ? Math.round((amount / total) * 100) : 0,
+        count: map[method].count,
+        icon: method === 'UPI' ? 'qrcode-scan' : method === 'Cash' ? 'cash' : method.includes('Card') ? 'credit-card' : method.includes('Online') ? 'bank' : 'dots-horizontal',
+      };
+    });
+  },
+
+  getFinancialHealthScore(expenses: Expense[], budgets: Budget[]): { score: number; status: string; statusColor: string; recommendation: string } {
+    if (expenses.length === 0) {
+      return {
+        score: 85,
+        status: 'Good Start',
+        statusColor: '#10B981',
+        recommendation: 'Log transactions to unlock real-time financial health analytics.',
+      };
+    }
+
+    const convert = useCurrencyStore.getState().convert;
+    const monthlySpend = this.getMonthlySpend(expenses);
+    const monthlyBudget = budgets.find((b) => b.category.toLowerCase() === 'all' && b.period === 'monthly')?.amount || 0;
+
+    let score = 82;
+
+    if (monthlyBudget > 0) {
+      const ratio = monthlySpend / monthlyBudget;
+      if (ratio <= 0.7) score += 12;
+      else if (ratio <= 0.9) score += 4;
+      else if (ratio > 1.0) score -= Math.min(40, Math.round((ratio - 1) * 50));
+    } else {
+      score -= 4;
+    }
+
+    if (expenses.length >= 8) score += 4;
+
+    const finalScore = Math.max(15, Math.min(99, score));
+
+    let status = 'Optimal';
+    let statusColor = '#10B981';
+    let recommendation = 'Your spending habits are balanced and within healthy financial targets!';
+
+    if (finalScore < 55) {
+      status = 'Needs Attention';
+      statusColor = '#EF4444';
+      recommendation = 'Monthly expenses exceed recommended budget limits. Review discretionary spending.';
+    } else if (finalScore < 78) {
+      status = 'Moderate';
+      statusColor = '#F59E0B';
+      recommendation = 'You are approaching your budget limits. Monitor daily dining out and leisure expenses.';
+    }
+
+    return { score: finalScore, status, statusColor, recommendation };
+  },
+
+  getSpendingPatternByDay(expenses: Expense[]): { dayName: string; amount: number; percentage: number }[] {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const convert = useCurrencyStore.getState().convert;
+    const totals = [0, 0, 0, 0, 0, 0, 0];
+
+    let overallSum = 0;
+    expenses.forEach((e) => {
+      const d = new Date(e.date + 'T00:00:00');
+      const idx = d.getDay();
+      const amt = convert(Number(e.amount), e.currency || 'INR', 'INR');
+      totals[idx] += amt;
+      overallSum += amt;
+    });
+
+    return days.map((dayName, idx) => ({
+      dayName,
+      amount: totals[idx],
+      percentage: overallSum > 0 ? Math.round((totals[idx] / overallSum) * 100) : 0,
+    }));
+  },
+
+  getCategoryMeta(categoryName: string, categoriesList?: any[]): { name: string; color: string; icon: string } {
+    if (categoriesList && categoriesList.length > 0) {
+      const found = categoriesList.find((c) => c.name.toLowerCase() === (categoryName || '').toLowerCase());
+      if (found) {
+        return { name: found.name, color: found.color, icon: found.icon };
+      }
+    }
+
+    const nameLower = (categoryName || '').toLowerCase();
+    if (nameLower.includes('food') || nameLower.includes('dine') || nameLower.includes('cafe')) {
+      return { name: 'Food', color: '#FF9500', icon: 'food-fork-drink' };
+    }
+    if (nameLower.includes('grocer') || nameLower.includes('mart')) {
+      return { name: 'Grocery', color: '#4CD964', icon: 'cart' };
+    }
+    if (nameLower.includes('fuel') || nameLower.includes('gas') || nameLower.includes('petrol')) {
+      return { name: 'Fuel', color: '#FFCC00', icon: 'gas-station' };
+    }
+    if (nameLower.includes('shop') || nameLower.includes('cloth') || nameLower.includes('store')) {
+      return { name: 'Shopping', color: '#FF2D55', icon: 'shopping' };
+    }
+    if (nameLower.includes('bill') || nameLower.includes('electric') || nameLower.includes('utility') || nameLower.includes('water')) {
+      return { name: 'Bills', color: '#5856D6', icon: 'file-document-outline' };
+    }
+    if (nameLower.includes('travel') || nameLower.includes('flight') || nameLower.includes('trip') || nameLower.includes('cab') || nameLower.includes('taxi')) {
+      return { name: 'Travel', color: '#5AC8FA', icon: 'airplane' };
+    }
+    if (nameLower.includes('entertain') || nameLower.includes('movie') || nameLower.includes('show') || nameLower.includes('game')) {
+      return { name: 'Entertainment', color: '#FF5E3A', icon: 'movie-roll' };
+    }
+    if (nameLower.includes('health') || nameLower.includes('med') || nameLower.includes('pharmacy')) {
+      return { name: 'Health', color: '#FF3B30', icon: 'heart-pulse' };
+    }
+    if (nameLower.includes('rent') || nameLower.includes('house') || nameLower.includes('home')) {
+      return { name: 'Rent', color: '#8E8E93', icon: 'home-variant' };
+    }
+    if (nameLower.includes('bank') || nameLower.includes('emi') || nameLower.includes('loan')) {
+      return { name: 'EMI', color: '#A4E786', icon: 'bank' };
+    }
+    if (nameLower.includes('school') || nameLower.includes('edu') || nameLower.includes('college')) {
+      return { name: 'Education', color: '#007AFF', icon: 'school' };
+    }
+    if (nameLower.includes('salary') || nameLower.includes('income') || nameLower.includes('pay')) {
+      return { name: 'Salary', color: '#34C759', icon: 'cash-multiple' };
+    }
+
+    return { name: categoryName || 'Other', color: '#C7C7CC', icon: 'dots-horizontal' };
+  },
 };
