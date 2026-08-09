@@ -78,7 +78,9 @@ function RootLayoutNav() {
     useCurrencyStore.getState().fetchRates();
 
     // 3. Initialize Supabase Auth session
-    initializeAuth();
+    initializeAuth().then(() => {
+      fetchBudgets();
+    });
 
     // 4. Load persisted notification history
     useNotificationStore.getState().loadNotifications();
