@@ -372,4 +372,53 @@ export const expenseHelpers = {
       percentage: overallSum > 0 ? Math.round((totals[idx] / overallSum) * 100) : 0,
     }));
   },
+
+  getCategoryMeta(categoryName: string, categoriesList?: any[]): { name: string; color: string; icon: string } {
+    if (categoriesList && categoriesList.length > 0) {
+      const found = categoriesList.find((c) => c.name.toLowerCase() === (categoryName || '').toLowerCase());
+      if (found) {
+        return { name: found.name, color: found.color, icon: found.icon };
+      }
+    }
+
+    const nameLower = (categoryName || '').toLowerCase();
+    if (nameLower.includes('food') || nameLower.includes('dine') || nameLower.includes('cafe')) {
+      return { name: 'Food', color: '#FF9500', icon: 'food-fork-drink' };
+    }
+    if (nameLower.includes('grocer') || nameLower.includes('mart')) {
+      return { name: 'Grocery', color: '#4CD964', icon: 'cart' };
+    }
+    if (nameLower.includes('fuel') || nameLower.includes('gas') || nameLower.includes('petrol')) {
+      return { name: 'Fuel', color: '#FFCC00', icon: 'gas-station' };
+    }
+    if (nameLower.includes('shop') || nameLower.includes('cloth') || nameLower.includes('store')) {
+      return { name: 'Shopping', color: '#FF2D55', icon: 'shopping' };
+    }
+    if (nameLower.includes('bill') || nameLower.includes('electric') || nameLower.includes('utility') || nameLower.includes('water')) {
+      return { name: 'Bills', color: '#5856D6', icon: 'file-document-outline' };
+    }
+    if (nameLower.includes('travel') || nameLower.includes('flight') || nameLower.includes('trip') || nameLower.includes('cab') || nameLower.includes('taxi')) {
+      return { name: 'Travel', color: '#5AC8FA', icon: 'airplane' };
+    }
+    if (nameLower.includes('entertain') || nameLower.includes('movie') || nameLower.includes('show') || nameLower.includes('game')) {
+      return { name: 'Entertainment', color: '#FF5E3A', icon: 'movie-roll' };
+    }
+    if (nameLower.includes('health') || nameLower.includes('med') || nameLower.includes('pharmacy')) {
+      return { name: 'Health', color: '#FF3B30', icon: 'heart-pulse' };
+    }
+    if (nameLower.includes('rent') || nameLower.includes('house') || nameLower.includes('home')) {
+      return { name: 'Rent', color: '#8E8E93', icon: 'home-variant' };
+    }
+    if (nameLower.includes('bank') || nameLower.includes('emi') || nameLower.includes('loan')) {
+      return { name: 'EMI', color: '#A4E786', icon: 'bank' };
+    }
+    if (nameLower.includes('school') || nameLower.includes('edu') || nameLower.includes('college')) {
+      return { name: 'Education', color: '#007AFF', icon: 'school' };
+    }
+    if (nameLower.includes('salary') || nameLower.includes('income') || nameLower.includes('pay')) {
+      return { name: 'Salary', color: '#34C759', icon: 'cash-multiple' };
+    }
+
+    return { name: categoryName || 'Other', color: '#C7C7CC', icon: 'dots-horizontal' };
+  },
 };

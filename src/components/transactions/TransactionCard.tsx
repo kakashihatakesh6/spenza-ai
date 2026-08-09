@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Expense } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
 import { expenseHelpers } from '../../utils/expenseHelpers';
@@ -10,29 +10,6 @@ interface TransactionCardProps {
   onPress: () => void;
   currencySymbol: string;
 }
-
-const CATEGORY_STYLES: Record<string, { bg: string; color: string; icon: keyof typeof Feather.glyphMap }> = {
-  shopping: { bg: '#FFE5EC', color: '#FF6B81', icon: 'shopping-bag' },
-  travel: { bg: '#E8F1F5', color: '#35B6D5', icon: 'compass' },
-  bills: { bg: '#F0E6FF', color: '#8E7CF3', icon: 'file-text' },
-  food: { bg: '#FFF3CD', color: '#FFB648', icon: 'coffee' },
-  salary: { bg: '#E8F5E9', color: '#34C759', icon: 'dollar-sign' },
-  transport: { bg: '#E0F7FA', color: '#35B6D5', icon: 'truck' },
-  entertainment: { bg: '#FFFDE7', color: '#FFB648', icon: 'film' },
-  default: { bg: '#F5F5F5', color: '#666666', icon: 'tag' },
-};
-
-const getCategoryStyle = (category: string) => {
-  const norm = (category || '').toLowerCase();
-  if (norm.includes('shop') || norm.includes('cloth')) return CATEGORY_STYLES.shopping;
-  if (norm.includes('travel') || norm.includes('flight') || norm.includes('trip') || norm.includes('cab') || norm.includes('taxi')) return CATEGORY_STYLES.travel;
-  if (norm.includes('bill') || norm.includes('utility') || norm.includes('rent') || norm.includes('insurance')) return CATEGORY_STYLES.bills;
-  if (norm.includes('food') || norm.includes('dine') || norm.includes('cafe') || norm.includes('eat') || norm.includes('grocer')) return CATEGORY_STYLES.food;
-  if (norm.includes('salary') || norm.includes('income') || norm.includes('earn')) return CATEGORY_STYLES.salary;
-  if (norm.includes('transport') || norm.includes('car') || norm.includes('fuel')) return CATEGORY_STYLES.transport;
-  if (norm.includes('entertain') || norm.includes('movie') || norm.includes('show') || norm.includes('game') || norm.includes('music')) return CATEGORY_STYLES.entertainment;
-  return CATEGORY_STYLES.default;
-};
 
 const formatToAmPm = (timeStr: string) => {
   if (!timeStr) return '';
@@ -66,13 +43,13 @@ export const TransactionCard: React.FC<TransactionCardProps> = React.memo(({
   currencySymbol,
 }) => {
   const { colors, isDark } = useTheme();
-  const catStyle = getCategoryStyle(transaction.category);
+  const catMeta = expenseHelpers.getCategoryMeta(transaction.category);
   const isIncome = (transaction.category || '').toLowerCase().includes('salary') || 
                    (transaction.category || '').toLowerCase().includes('income');
 
-  // Dynamic icon colors inside circles for high visibility
-  const dynamicIconBg = isDark ? '#1E293B' : catStyle.bg;
-  const dynamicIconColor = isDark ? '#818CF8' : catStyle.color;
+  // Dynamic icon colors matching Category Distribution
+  const dynamicIconBg = isDark ? 'rgba(255,255,255,0.06)' : catMeta.color + '18';
+  const dynamicIconColor = catMeta.color;
   const displaySymbol = expenseHelpers.getCurrencySymbol(transaction.currency || currencySymbol);
 
   return (
@@ -87,14 +64,14 @@ export const TransactionCard: React.FC<TransactionCardProps> = React.memo(({
     >
       <View style={styles.leftSection}>
         <View style={[styles.iconContainer, { backgroundColor: dynamicIconBg }]}>
-          <Feather name={catStyle.icon} size={18} color={dynamicIconColor} />
+          <MaterialCommunityIcons name={(catMeta.icon || 'dots-horizontal') as any} size={20} color={dynamicIconColor} />
         </View>
         <View style={styles.centerSection}>
           <Text style={[styles.merchantText, { color: colors.text }]} numberOfLines={1}>
             {transaction.merchant}
           </Text>
           <Text style={styles.subText} numberOfLines={1}>
-            <Text style={{ color: dynamicIconColor, fontWeight: '600' }}>{transaction.category}</Text>
+            <Text style={{ color: dynamicIconColor, fontWeight: '700' }}>{transaction.category}</Text>
             <Text style={{ color: colors.textSecondary }}> • {formatToAmPm(transaction.time)}</Text>
           </Text>
         </View>

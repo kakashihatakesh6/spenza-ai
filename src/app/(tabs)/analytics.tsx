@@ -18,6 +18,7 @@ import { expenseHelpers } from '../../utils/expenseHelpers';
 import { Card } from '../../components/Card';
 import Svg, { Rect, Text as SvgText, G, Circle } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import {
   TrendingUp,
   Calendar,
@@ -152,7 +153,7 @@ export default function AnalyticsScreen() {
     }
   }, [timePeriod, expenses]);
 
-  // Trend Chart Renderer with Overlap Fix & Smooth Touch Interactions
+  // Trend Chart Renderer with Native Touch Overlay for 100% Reliable Interactivity
   const renderTrendChart = () => {
     const dataValues = chartData.map((d) => d.amount);
     const maxVal = Math.max(...dataValues, 100);
@@ -160,19 +161,19 @@ export default function AnalyticsScreen() {
     const chartHeight = 200;
     const chartWidth = SCREEN_WIDTH - 64;
     const paddingBottom = 28;
-    const paddingTop = 36; // Extra space to prevent amount text overlapping top
+    const paddingTop = 36;
     const barWidth = timePeriod === 'weekly' ? 24 : timePeriod === 'yearly' ? 38 : 30;
     const availableHeight = chartHeight - paddingTop - paddingBottom;
     const barGap = (chartWidth - barWidth * chartData.length) / (chartData.length + 1);
 
     const formatBarAmount = (amt: number) => {
-      if (amt >= 100000) return `₹${(amt / 1000).toFixed(0)}k`;
-      if (amt >= 1000) return `₹${(amt / 1000).toFixed(1)}k`;
-      return `₹${amt.toFixed(0)}`;
+      if (amt >= 100000) return `${currencySymbol}${(amt / 1000).toFixed(0)}k`;
+      if (amt >= 1000) return `${currencySymbol}${(amt / 1000).toFixed(1)}k`;
+      return `${currencySymbol}${amt.toFixed(0)}`;
     };
 
     return (
-      <View style={styles.chartWrapper}>
+      <View style={[styles.chartWrapper, { width: chartWidth, height: chartHeight }]}>
         <Svg height={chartHeight} width={chartWidth}>
           <G>
             {chartData.map((d, i) => {
@@ -184,15 +185,6 @@ export default function AnalyticsScreen() {
 
               return (
                 <G key={i}>
-                  {/* Expanded Hit Box for Smooth Finger Tapping */}
-                  <Rect
-                    x={x - barGap / 2}
-                    y={0}
-                    width={barWidth + barGap}
-                    height={chartHeight}
-                    fill="transparent"
-                    onPress={() => setSelectedBarIndex(i)}
-                  />
                   {/* Column Bar */}
                   <Rect
                     x={x}
@@ -202,7 +194,6 @@ export default function AnalyticsScreen() {
                     rx={6}
                     fill={isSelected ? colors.primary : isDark ? '#334155' : '#CBD5E1'}
                     opacity={d.amount > 0 ? (isSelected ? 1 : 0.65) : 0.25}
-                    onPress={() => setSelectedBarIndex(i)}
                   />
                   {/* Amount label directly above selected column */}
                   {isSelected && d.amount > 0 && (
@@ -233,6 +224,25 @@ export default function AnalyticsScreen() {
             })}
           </G>
         </Svg>
+
+        {/* 100% Reliable Native Touchable Overlay across all columns */}
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+          <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
+            {chartData.map((_, i) => (
+              <TouchableOpacity
+                key={i}
+                style={{ flex: 1, height: '100%' }}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setSelectedBarIndex(i);
+                  try {
+                    Haptics.selectionAsync();
+                  } catch {}
+                }}
+              />
+            ))}
+          </View>
+        </View>
       </View>
     );
   };
