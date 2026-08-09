@@ -19,6 +19,8 @@ import { authService } from '../../services/auth.service';
 import { supabase } from '../../lib/supabase';
 import { Header } from '../../components/Header';
 import { logger } from '../../services/logger';
+import { useSettingsStore } from '../../store/settingsStore';
+import { biometricService, BiometricStatus } from '../../services/biometric.service';
 import {
   ArrowLeft,
   Shield,
@@ -30,6 +32,11 @@ import {
   Eye,
   EyeOff,
   Globe as GoogleIcon,
+  Fingerprint,
+  Check,
+  Sparkles,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react-native';
 
 import { SessionItem } from '../../services/session.service';
@@ -40,8 +47,82 @@ export default function SecurityScreen() {
   const { colors, isDark } = useTheme();
   const user = useAuthStore((state) => state.user);
 
-  const [biometricsEnabled, setBiometricsEnabled] = useState(true);
+  const biometricsEnabled = useSettingsStore((state) => state.settings.biometricsEnabled);
+  const setBiometricsEnabled = useSettingsStore((state) => state.setBiometricsEnabled);
+
+  const [biometricInfo, setBiometricInfo] = useState<BiometricStatus | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+
+  useEffect(() => {
+    biometricService.checkBiometricSupport().then((info) => {
+      setBiometricInfo(info);
+    });
+  }, []);
+
+  const handleToggleBiometrics = async (value: boolean) => {
+    if (value) {
+      const status = await biometricService.checkBiometricSupport();
+      if (!status.isHardwareAvailable) {
+        useAlertStore.getState().showAlert(
+          'Biometrics Unavailable',
+          'Biometric hardware is not available on this device.',
+          'warning'
+        );
+        return;
+      }
+
+      if (!status.isEnrolled && Platform.OS !== 'web') {
+        useAlertStore.getState().showAlert(
+          'No Biometrics Enrolled',
+          'Please set up Fingerprint or Face ID in your device settings first.',
+          'warning'
+        );
+        return;
+      }
+
+      // Verify fingerprint before enabling
+      const res = await biometricService.authenticate('Scan fingerprint to confirm enabling App Lock');
+      if (res.success) {
+        setBiometricsEnabled(true);
+        useAlertStore.getState().showAlert(
+          'Biometric Lock Enabled',
+          'Spendly will now ask for your fingerprint whenever the app opens.',
+          'success'
+        );
+      } else if (res.error && res.error !== 'Authentication cancelled.') {
+        useAlertStore.getState().showAlert('Authentication Failed', res.error, 'error');
+      }
+    } else {
+      setBiometricsEnabled(false);
+      useAlertStore.getState().showAlert(
+        'Biometric Lock Disabled',
+        'App startup fingerprint protection is now turned off.',
+        'info'
+      );
+    }
+  };
+
+  const [isTestingBiometric, setIsTestingBiometric] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'failed' | null>(null);
+
+  const handleTestFingerprint = async () => {
+    setIsTestingBiometric(true);
+    setTestResult(null);
+    try {
+      const res = await biometricService.authenticate('Test your fingerprint scanner');
+      if (res.success) {
+        setTestResult('success');
+        useAlertStore.getState().showAlert('Scanner Test Passed', 'Your fingerprint sensor is working properly.', 'success');
+      } else {
+        setTestResult('failed');
+        if (res.error && res.error !== 'Authentication cancelled.') {
+          useAlertStore.getState().showAlert('Scanner Test Failed', res.error, 'error');
+        }
+      }
+    } finally {
+      setIsTestingBiometric(false);
+    }
+  };
 
   // Password fields
   const [currentPassword, setCurrentPassword] = useState('');
@@ -226,14 +307,69 @@ export default function SecurityScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.switchRow}>
             <View style={styles.switchTextCol}>
-              <Text style={[styles.switchTitle, { color: colors.text }]}>Face ID / Biometrics</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Fingerprint size={16} color={colors.primary} />
+                <Text style={[styles.switchTitle, { color: colors.text, marginBottom: 0 }]}>
+                  Fingerprint / Biometric Lock
+                </Text>
+              </View>
               <Text style={[styles.switchDesc, { color: colors.textSecondary }]}>
-                Unlock Spendly immediately using system biometrics.
+                Require fingerprint verification whenever opening or resuming Spendly.
               </Text>
+              {biometricInfo && (
+                <View style={{ marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: biometricInfo.isHardwareAvailable ? colors.success : colors.danger
+                    }} />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary }}>
+                      {biometricInfo.isHardwareAvailable
+                        ? `${biometricInfo.supportedTypes.join(' & ')} Ready`
+                        : 'Hardware Not Detected'}
+                    </Text>
+                  </View>
+
+                  {biometricInfo.isHardwareAvailable && (
+                    <TouchableOpacity
+                      onPress={handleTestFingerprint}
+                      disabled={isTestingBiometric}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        marginTop: 8,
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF',
+                        borderRadius: 8,
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      {isTestingBiometric ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : testResult === 'success' ? (
+                        <Check size={14} color={colors.success} />
+                      ) : (
+                        <RefreshCw size={14} color={colors.primary} />
+                      )}
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
+                        {isTestingBiometric
+                          ? 'Testing Sensor...'
+                          : testResult === 'success'
+                          ? 'Test Passed!'
+                          : 'Test Fingerprint Sensor'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
             <Switch
               value={biometricsEnabled}
-              onValueChange={setBiometricsEnabled}
+              onValueChange={handleToggleBiometrics}
               trackColor={{ false: '#D1D5DB', true: colors.primary }}
               thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
             />

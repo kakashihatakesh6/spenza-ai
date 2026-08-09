@@ -14,6 +14,7 @@ import { Platform, View, Text, ActivityIndicator, StyleSheet, AppState, AppState
 import * as Notifications from 'expo-notifications';
 import { useNotificationStore } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
+import { BiometricLockScreen } from '../components/BiometricLockScreen';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { CustomAlertModal } from '../components/CustomAlertModal';
 import { logger } from '../services/logger';
@@ -43,8 +44,18 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  const biometricsEnabled = useSettingsStore((state) => state.settings.biometricsEnabled);
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
+  const initialLockSet = useRef<boolean>(false);
   const [appReadyLogged, setAppReadyLogged] = useState(false);
   const prevSegments = useRef<string[]>([]);
+
+  useEffect(() => {
+    if (!initialLockSet.current && biometricsEnabled && user) {
+      setIsAppLocked(true);
+      initialLockSet.current = true;
+    }
+  }, [biometricsEnabled, user]);
 
   useEffect(() => {
     logger.info('App launched');
@@ -57,6 +68,11 @@ function RootLayoutNav() {
     fetchExpenses();
     fetchCategories();
     fetchBudgets();
+
+    // Check biometrics initial lock state right after settings fetch
+    if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+      setIsAppLocked(true);
+    }
 
     // Fetch dynamic exchange rates from API
     useCurrencyStore.getState().fetchRates();
@@ -72,8 +88,14 @@ function RootLayoutNav() {
       if (nextAppState === 'active') {
         logger.info('App resumed');
         useAuthStore.getState().validateSession();
+        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+          setIsAppLocked(true);
+        }
       } else if (nextAppState === 'background') {
         logger.info('App moved to background');
+        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+          setIsAppLocked(true);
+        }
       }
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
@@ -293,6 +315,10 @@ function RootLayoutNav() {
           onAnimationEnd={() => setSplashVisible(false)}
           isLoading={authLoading}
         />
+      )}
+
+      {isAppLocked && user && !splashVisible && (
+        <BiometricLockScreen onUnlockSuccess={() => setIsAppLocked(false)} />
       )}
 
       <CustomAlertModal />
