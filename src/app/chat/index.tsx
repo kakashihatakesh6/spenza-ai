@@ -1,51 +1,46 @@
+import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
+import {
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  FileSpreadsheet,
+  Info,
+  Send,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  User,
+  XCircle
+} from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  TextInput,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Animated,
   AppState,
+  FlatList,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
+import { BotAvatar } from '../../components/BotAvatar';
+import { Header } from '../../components/Header';
 import { useTheme } from '../../hooks/useTheme';
+import { exportService } from '../../services/exportService';
+import { useAlertStore } from '../../store/alertStore';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { useExpenseStore } from '../../store/expenseStore';
-import { useAlertStore } from '../../store/alertStore';
-import { exportService } from '../../services/exportService';
-import { Header } from '../../components/Header';
-import { BotAvatar } from '../../components/BotAvatar';
-import {
-  Send,
-  XCircle,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
-  Scan,
-  TrendingUp,
-  MessageSquare,
-  Bot,
-  BarChart3,
-  Wallet,
-  User,
-  Download,
-  FileSpreadsheet,
-} from 'lucide-react-native';
 
 // Entry animation for message items
 const AnimatedMessageItem = ({ children, isUser }: { children: React.ReactNode; isUser: boolean }) => {
@@ -153,7 +148,7 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
         <Text style={[styles.suggestionsHeaderSub, { color: colors.textSecondary }]}>
           Ask about Spendly features, offline guides, policies, or select a query below:
         </Text>
-        
+
         <View style={styles.suggestionsGrid}>
           {suggestions.map((item, idx) => {
             const IconComp = item.icon;
@@ -220,7 +215,7 @@ export default function ChatDashboardScreen() {
   const [initializing, setInitializing] = useState(true);
   const [expandedCitationsMsgId, setExpandedCitationsMsgId] = useState<Record<string, boolean>>({});
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
-  
+
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
   const userScrolledUpRef = useRef<boolean>(false);
@@ -230,7 +225,7 @@ export default function ChatDashboardScreen() {
   useEffect(() => {
     initializeChatStore();
     let isMounted = true;
-    
+
     const initChatSession = async () => {
       if (!user?.id) {
         if (isMounted) setInitializing(false);
@@ -241,7 +236,7 @@ export default function ChatDashboardScreen() {
       try {
         // 1. Fetch user conversations from Supabase
         const convs = await loadConversations();
-        
+
         if (!isMounted) return;
 
         // 2. Identify target active conversation
@@ -604,7 +599,7 @@ export default function ChatDashboardScreen() {
             ) : (
               <View>
                 {renderFormattedMarkdown(item.content, item.citations)}
-                
+
                 {csvItems && (
                   <TouchableOpacity
                     style={[
@@ -834,7 +829,7 @@ export default function ChatDashboardScreen() {
                 Cannot send messages while offline. Check connection.
               </Text>
             )}
-            
+
             <View style={styles.inputContainer}>
               <TextInput
                 ref={textInputRef}
@@ -1070,7 +1065,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  
+
   // Suggestions Deck Styling
   suggestionsContainer: {
     flex: 1,

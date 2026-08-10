@@ -1,49 +1,46 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  TextInput,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  AppState,
-  Keyboard,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import { useTheme } from '../../hooks/useTheme';
-import { useChatStore } from '../../store/chatStore';
-import { useExpenseStore } from '../../store/expenseStore';
-import { useAlertStore } from '../../store/alertStore';
-import { exportService } from '../../services/exportService';
-import { Header } from '../../components/Header';
-import { BotAvatar } from '../../components/BotAvatar';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  Send,
-  CornerDownLeft,
-  XCircle,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  Info,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
-  FileSpreadsheet,
+  Info,
+  Send,
+  ThumbsDown,
+  ThumbsUp,
+  XCircle
 } from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BotAvatar } from '../../components/BotAvatar';
+import { Header } from '../../components/Header';
+import { useTheme } from '../../hooks/useTheme';
+import { exportService } from '../../services/exportService';
+import { useAlertStore } from '../../store/alertStore';
+import { useChatStore } from '../../store/chatStore';
+import { useExpenseStore } from '../../store/expenseStore';
 
 export default function ChatSessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { colors, isDark } = useTheme();
-  
+
   const {
     messages,
     activeConversation,
@@ -88,7 +85,7 @@ export default function ChatSessionScreen() {
     );
   };
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
-  
+
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
   const userScrolledUpRef = useRef<boolean>(false);
@@ -298,7 +295,7 @@ export default function ChatSessionScreen() {
   const renderMessageContentText = (text: string, citationsList: any[]) => {
     // Split by brackets e.g. [1], [2], etc.
     const parts = text.split(/(\[\d+\])/g);
-    
+
     return parts.map((part, partIdx) => {
       const match = part.match(/^\[(\d+)\]$/);
       if (match && citationsList && citationsList.length > 0) {
@@ -411,7 +408,7 @@ export default function ChatSessionScreen() {
           ) : (
             <View>
               {renderFormattedMarkdown(item.content, item.citations)}
-              
+
               {csvItems && (
                 <TouchableOpacity
                   style={[
@@ -430,7 +427,7 @@ export default function ChatSessionScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-              
+
               {/* Citations / Sources list section */}
               {hasCitations && (
                 <View style={[styles.citationsContainer, { borderTopColor: colors.border }]}>
@@ -634,7 +631,7 @@ export default function ChatSessionScreen() {
               Cannot send messages while offline. Check connection.
             </Text>
           )}
-          
+
           <View style={styles.inputContainer}>
             <TextInput
               ref={textInputRef}
