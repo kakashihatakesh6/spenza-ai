@@ -439,6 +439,15 @@ export default function ChatDashboardScreen() {
     }
   };
 
+  const handleInputChange = (text: string) => {
+    setInputVal(text);
+    userScrolledUpRef.current = false;
+    setShowScrollBottomBtn(false);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  };
+
   const handleCopyMessage = async (text: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied', 'Response copied to clipboard.');
@@ -840,11 +849,16 @@ export default function ChatDashboardScreen() {
                 placeholder={isOnline ? "Ask Spendly AI about policies..." : "Offline - typing disabled"}
                 placeholderTextColor={colors.textSecondary}
                 value={inputVal}
-                onChangeText={setInputVal}
+                onChangeText={handleInputChange}
                 onFocus={() => {
+                  userScrolledUpRef.current = false;
+                  setShowScrollBottomBtn(false);
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: true });
-                  }, 150);
+                  }, 50);
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 250);
                 }}
                 editable={isOnline && !sending && !isStreaming}
                 multiline
