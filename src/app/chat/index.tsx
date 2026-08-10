@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  AppState,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -267,6 +269,16 @@ export default function ChatDashboardScreen() {
       cleanupChatStore();
     };
   }, [user?.id]);
+
+  // Dismiss keyboard when app goes to background so native keyboard layout stays in sync upon resume
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        Keyboard.dismiss();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const handleClearChat = () => {
     Alert.alert(
@@ -669,14 +681,14 @@ export default function ChatDashboardScreen() {
         onRightPress={handleClearChat}
       />
 
-      {initializing || isLoadingMsgs || isLoadingConvs ? (
+      {initializing || isLoadingMsgs ? (
         <View style={styles.loadingWrapper}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Initializing RAG pipeline...</Text>
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
           style={{ flex: 1 }}
         >

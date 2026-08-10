@@ -27,7 +27,7 @@ interface ChatState {
   cleanupChatStore: () => void;
   resetChatStore: () => void;
   clearChat: () => Promise<void>;
-  loadConversations: () => Promise<Conversation[]>;
+  loadConversations: (showLoading?: boolean) => Promise<Conversation[]>;
   selectConversation: (id: string, forceReload?: boolean) => Promise<void>;
   startNewConversation: (userId: string, title?: string) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
@@ -111,9 +111,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
-    loadConversations: async () => {
+    loadConversations: async (showLoading = false) => {
       try {
-        set({ isLoadingConvs: true });
+        if (showLoading || get().conversations.length === 0) {
+          set({ isLoadingConvs: true });
+        }
         const convs = await chatService.getConversations();
         set({ conversations: convs, isLoadingConvs: false });
         return convs;
