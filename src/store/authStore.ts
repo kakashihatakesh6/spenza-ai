@@ -46,6 +46,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           logger.info('Session restored / signed in');
         } else if (event === 'SIGNED_OUT') {
           logger.info('User signed out');
+          try {
+            // Lazy import to prevent circular dependency
+            const { useChatStore } = require('./chatStore');
+            useChatStore.getState().resetChatStore();
+          } catch (err) {
+            logger.warn('Failed to reset chat store on sign out', err);
+          }
         } else if (event === 'TOKEN_REFRESHED' && !session) {
           logger.info('Session expired');
         } else if (event === 'USER_UPDATED' && session) {
@@ -53,6 +60,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         set((state) => {
+          // If session user ID changed, reset chat store
+          if (state.user?.id && session?.user?.id && state.user.id !== session.user.id) {
+            try {
+              const { useChatStore } = require('./chatStore');
+              useChatStore.getState().resetChatStore();
+            } catch {}
+          }
+
           // If session access token & user id haven't changed on USER_UPDATED, update user object without resetting isLoading
           if (event === 'USER_UPDATED' && state.session?.access_token === session?.access_token && state.user?.id === session?.user?.id) {
             return { user: session?.user || state.user };
@@ -191,6 +206,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
       await authService.signOut();
+      try {
+        const { useChatStore } = require('./chatStore');
+        useChatStore.getState().resetChatStore();
+      } catch {}
       set({ session: null, user: null, isLoading: false });
     } catch (error) {
       logger.error('Failed to sign out', error);

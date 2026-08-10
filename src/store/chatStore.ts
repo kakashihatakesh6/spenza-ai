@@ -25,8 +25,10 @@ interface ChatState {
   // Actions
   initializeChatStore: () => void;
   cleanupChatStore: () => void;
-  loadConversations: () => Promise<void>;
-  selectConversation: (id: string) => Promise<void>;
+  resetChatStore: () => void;
+  clearChat: () => Promise<void>;
+  loadConversations: () => Promise<Conversation[]>;
+  selectConversation: (id: string, forceReload?: boolean) => Promise<void>;
   startNewConversation: (userId: string, title?: string) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   sendMessage: (messageText: string) => Promise<void>;
@@ -38,6 +40,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => {
   let unsubscribeNetwork: (() => void) | null = null;
+  let isCreatingConvLock = false;
 
   return {
     conversations: [],
@@ -71,14 +74,53 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
+    resetChatStore: () => {
+      set({
+        conversations: [],
+        activeConversation: null,
+        messages: [],
+        isLoadingConvs: false,
+        isLoadingMsgs: false,
+        isStreaming: false,
+        streamingMessageText: '',
+        streamingCitations: [],
+        activeStreamAbort: null,
+      });
+    },
+
+    clearChat: async () => {
+      try {
+        const user = useAuthStore.getState().user;
+        if (!user?.id) return;
+
+        set({ isLoadingMsgs: true });
+        await chatService.clearUserChat(user.id);
+        set({
+          conversations: [],
+          activeConversation: null,
+          messages: [],
+          isLoadingMsgs: false,
+          isStreaming: false,
+          streamingMessageText: '',
+          streamingCitations: [],
+        });
+      } catch (err) {
+        logger.error('Store: failed to clear chat history', err);
+        set({ isLoadingMsgs: false });
+        throw err;
+      }
+    },
+
     loadConversations: async () => {
       try {
         set({ isLoadingConvs: true });
         const convs = await chatService.getConversations();
         set({ conversations: convs, isLoadingConvs: false });
+        return convs;
       } catch (err) {
         logger.error('Store: failed to load conversations', err);
         set({ isLoadingConvs: false });
+        return [];
       }
     },
 
@@ -102,7 +144,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
-    startNewConversation: async (userId: string, title = 'New Conversation') => {
+    startNewConversation: async (userId: string, title = 'Spendly AI Assistant') => {
+      if (isCreatingConvLock) {
+        throw new Error('Conversation creation already in progress.');
+      }
+      isCreatingConvLock = true;
       try {
         const newConv = await chatService.createConversation(userId, title);
         set((state) => ({
@@ -114,6 +160,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       } catch (err) {
         logger.error('Store: failed to start new conversation', err);
         throw err;
+      } finally {
+        isCreatingConvLock = false;
       }
     },
 
@@ -136,13 +184,34 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     sendMessage: async (messageText: string) => {
-      const activeConv = get().activeConversation;
+      const user = useAuthStore.getState().user;
+      if (!user?.id) {
+        throw new Error('User is not authenticated. Please sign in.');
+      }
+
       const isOnline = get().isOnline;
-      
-      if (!activeConv) return;
       if (!isOnline) {
         throw new Error('You are currently offline. Please reconnect to send messages.');
       }
+
+      let activeConv = get().activeConversation;
+      
+      // Auto-create active conversation if missing before sending message
+      if (!activeConv) {
+        if (get().conversations.length > 0) {
+          activeConv = get().conversations[0];
+          set({ activeConversation: activeConv });
+        } else {
+          try {
+            const newId = await get().startNewConversation(user.id, 'Spendly AI Assistant');
+            activeConv = get().conversations.find((c) => c.id === newId) || get().activeConversation;
+          } catch (err) {
+            logger.warn('Failed client-side conversation creation, relying on server auto-creation', err);
+          }
+        }
+      }
+
+      const currentConvId = activeConv?.id || null;
       
       // Clear streaming buffers and activate streaming state
       set({
@@ -154,7 +223,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       // Optimistically append user message to list
       const tempUserMsg: ChatMessage = {
         id: `temp-user-${Date.now()}`,
-        conversation_id: activeConv.id,
+        conversation_id: currentConvId || 'pending',
         role: 'user',
         content: messageText,
         citations: [],
@@ -167,7 +236,7 @@ export const useChatStore = create<ChatState>((set, get) => {
 
       // Initiate SSE streaming connection via service
       const abortRef = chatService.streamChatMessage(
-        activeConv.id,
+        currentConvId,
         messageText,
         (token) => {
           set((state) => ({
@@ -178,10 +247,12 @@ export const useChatStore = create<ChatState>((set, get) => {
           set({ streamingCitations: citations });
         },
         async (doneData) => {
+          const resolvedConvId = doneData.conversation_id || currentConvId;
+
           // Streaming completed successfully
           const completedResponseMsg: ChatMessage = {
             id: doneData.message_id,
-            conversation_id: activeConv.id,
+            conversation_id: resolvedConvId || '',
             role: 'assistant',
             content: get().streamingMessageText,
             citations: get().streamingCitations,
@@ -191,14 +262,27 @@ export const useChatStore = create<ChatState>((set, get) => {
 
           // Re-fetch conversation messages to ensure exact IDs sync
           try {
-            const freshMsgs = await chatService.getMessages(activeConv.id);
-            set({
-              messages: freshMsgs,
-              isStreaming: false,
-              streamingMessageText: '',
-              streamingCitations: [],
-              activeStreamAbort: null,
-            });
+            if (resolvedConvId) {
+              const freshMsgs = await chatService.getMessages(resolvedConvId);
+              set({
+                messages: freshMsgs,
+                isStreaming: false,
+                streamingMessageText: '',
+                streamingCitations: [],
+                activeStreamAbort: null,
+              });
+            } else {
+              set((state) => {
+                const listWithoutTemp = state.messages.filter((m) => !m.id.startsWith('temp-user'));
+                return {
+                  messages: [...listWithoutTemp, { ...tempUserMsg, id: `user-${Date.now()}` }, completedResponseMsg],
+                  isStreaming: false,
+                  streamingMessageText: '',
+                  streamingCitations: [],
+                  activeStreamAbort: null,
+                };
+              });
+            }
           } catch {
             // Fallback: update list locally
             set((state) => {
@@ -213,8 +297,15 @@ export const useChatStore = create<ChatState>((set, get) => {
             });
           }
           
-          // Re-load conversation list to update titles/summary/updated_at
-          get().loadConversations();
+          // Re-load conversation list to update titles/summary/updated_at and sync active conversation
+          await get().loadConversations();
+          if (resolvedConvId) {
+            const updatedConvs = get().conversations;
+            const updatedActive = updatedConvs.find((c) => c.id === resolvedConvId);
+            if (updatedActive) {
+              set({ activeConversation: updatedActive });
+            }
+          }
 
           // INSTANTLY refresh User Profile, Budgets, and Expenses across the app!
           try {

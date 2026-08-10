@@ -207,6 +207,7 @@ export default function ChatDashboardScreen() {
     loadConversations,
     selectConversation,
     startNewConversation,
+    clearChat,
     sendMessage,
     cancelStreaming,
     submitFeedback,
@@ -221,59 +222,76 @@ export default function ChatDashboardScreen() {
   const flatListRef = useRef<FlatList>(null);
   const userScrolledUpRef = useRef<boolean>(false);
 
-  // Initialize and load chat session silently on mount (using user?.id to prevent object ref re-renders)
+  // Deterministic single-pass initialization flow on mount / user change
   useEffect(() => {
     initializeChatStore();
+    let isMounted = true;
     
     const initChatSession = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        if (isMounted) setInitializing(false);
+        return;
+      }
+
+      setInitializing(true);
       try {
-        await loadConversations();
+        // 1. Fetch user conversations from Supabase
+        const convs = await loadConversations();
+        
+        if (!isMounted) return;
+
+        // 2. Identify target active conversation
+        const active = useChatStore.getState().activeConversation;
+        const mainConv = convs.find(
+          (c) => c.title === 'Spendly AI Assistant' || c.title.includes('AI Assistant')
+        ) || convs[0];
+
+        const targetConv = (active && convs.some((c) => c.id === active.id)) ? active : mainConv;
+
+        // 3. Load messages for target conversation if available
+        if (targetConv) {
+          await selectConversation(targetConv.id);
+        }
       } catch (err) {
-        console.warn('Failed to load conversations:', err);
+        console.warn('[Chat] Failed to initialize chat session:', err);
+      } finally {
+        if (isMounted) {
+          setInitializing(false);
+        }
       }
     };
 
     initChatSession();
-    return () => cleanupChatStore();
+    return () => {
+      isMounted = false;
+      cleanupChatStore();
+    };
   }, [user?.id]);
 
-  // Set active conversation silently when list loads
-  useEffect(() => {
-    const autoSetupConversation = async () => {
-      if (!user?.id || isLoadingConvs || !initializing) return;
-
-      try {
-        // If active conversation is already loaded, finish initialization without wiping messages
-        if (activeConversation) {
-          setInitializing(false);
-          return;
-        }
-
-        // Find existing main chat session
-        const mainConv = conversations.find(
-          (c) => c.title === 'Spendly AI Assistant' || c.title.includes('AI Assistant')
-        ) || conversations[0];
-
-        if (mainConv) {
-          await selectConversation(mainConv.id);
-        } else {
-          // If no sessions, create one silently
-          console.log('[Chat] Creating new default chatbot session...');
-          const newId = await startNewConversation(user.id, 'Spendly AI Assistant');
-          await selectConversation(newId);
-        }
-      } catch (err) {
-        console.error('Error auto-setting up chat session:', err);
-      } finally {
-        setInitializing(false);
-      }
-    };
-
-    if (conversations.length >= 0 && !isLoadingConvs && user?.id) {
-      autoSetupConversation();
-    }
-  }, [conversations, isLoadingConvs, user?.id, activeConversation, initializing]);
+  const handleClearChat = () => {
+    Alert.alert(
+      'Clear Chat History',
+      'Are you sure you want to clear all chatbot conversation history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Chat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isStreaming) {
+                cancelStreaming();
+              }
+              await clearChat();
+              useAlertStore.getState().showAlert('Chat Cleared', 'Your chatbot history has been successfully cleared.', 'success');
+            } catch (err: any) {
+              useAlertStore.getState().showAlert('Error', 'Failed to clear chat history: ' + (err?.message || 'Error'), 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Non-blocking auto-scroll: auto-scroll to bottom only if user hasn't manually scrolled up
   useEffect(() => {
@@ -647,9 +665,11 @@ export default function ChatDashboardScreen() {
           }
           router.back();
         }}
+        rightIcon="trash-2"
+        onRightPress={handleClearChat}
       />
 
-      {initializing || isLoadingMsgs ? (
+      {initializing || isLoadingMsgs || isLoadingConvs ? (
         <View style={styles.loadingWrapper}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Initializing RAG pipeline...</Text>

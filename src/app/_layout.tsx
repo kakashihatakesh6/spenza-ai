@@ -44,18 +44,10 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
-  const biometricsEnabled = useSettingsStore((state) => state.settings.biometricsEnabled);
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
   const initialLockSet = useRef<boolean>(false);
   const [appReadyLogged, setAppReadyLogged] = useState(false);
   const prevSegments = useRef<string[]>([]);
-
-  useEffect(() => {
-    if (!initialLockSet.current && biometricsEnabled && user) {
-      setIsAppLocked(true);
-      initialLockSet.current = true;
-    }
-  }, [biometricsEnabled, user]);
 
   useEffect(() => {
     logger.info('App launched');
@@ -69,9 +61,12 @@ function RootLayoutNav() {
     fetchCategories();
     fetchBudgets();
 
-    // Check biometrics initial lock state right after settings fetch
-    if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-      setIsAppLocked(true);
+    // Check biometrics lock state on cold start app launch only
+    if (!initialLockSet.current) {
+      initialLockSet.current = true;
+      if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+        setIsAppLocked(true);
+      }
     }
 
     // Fetch dynamic exchange rates from API
@@ -90,14 +85,8 @@ function RootLayoutNav() {
       if (nextAppState === 'active') {
         logger.info('App resumed');
         useAuthStore.getState().validateSession();
-        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-          setIsAppLocked(true);
-        }
       } else if (nextAppState === 'background') {
         logger.info('App moved to background');
-        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-          setIsAppLocked(true);
-        }
       }
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);

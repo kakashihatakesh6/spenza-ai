@@ -50,6 +50,7 @@ export default function ChatSessionScreen() {
     streamingCitations,
     isOnline,
     selectConversation,
+    clearChat,
     sendMessage,
     cancelStreaming,
     submitFeedback,
@@ -58,6 +59,32 @@ export default function ChatSessionScreen() {
   const [inputVal, setInputVal] = useState('');
   const [sending, setSending] = useState(false);
   const [expandedCitationsMsgId, setExpandedCitationsMsgId] = useState<Record<string, boolean>>({});
+
+  const handleClearChat = () => {
+    Alert.alert(
+      'Clear Chat History',
+      'Are you sure you want to clear all chatbot conversation history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Chat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isStreaming) {
+                cancelStreaming();
+              }
+              await clearChat();
+              useAlertStore.getState().showAlert('Chat Cleared', 'Your chatbot history has been successfully cleared.', 'success');
+              router.replace('/chat');
+            } catch (err: any) {
+              useAlertStore.getState().showAlert('Error', 'Failed to clear chat history: ' + (err?.message || 'Error'), 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
@@ -450,6 +477,8 @@ export default function ChatSessionScreen() {
           }
           router.back();
         }}
+        rightIcon="trash-2"
+        onRightPress={handleClearChat}
       />
 
       <KeyboardAvoidingView
