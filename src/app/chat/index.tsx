@@ -222,7 +222,9 @@ export default function ChatDashboardScreen() {
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
   const userScrolledUpRef = useRef<boolean>(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Deterministic single-pass initialization flow on mount / user change
   useEffect(() => {
@@ -270,14 +272,42 @@ export default function ChatDashboardScreen() {
     };
   }, [user?.id]);
 
-  // Dismiss keyboard when app goes to background so native keyboard layout stays in sync upon resume
+  // Dynamic native keyboard listener & app lifecycle resume handler
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      const kh = e?.endCoordinates?.height || 0;
+      setKeyboardHeight(kh);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    };
+
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
+        textInputRef.current?.blur();
         Keyboard.dismiss();
+        setKeyboardHeight(0);
+      } else if (nextAppState === 'active') {
+        textInputRef.current?.blur();
+        setKeyboardHeight(0);
       }
     });
-    return () => subscription.remove();
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      appStateSub.remove();
+    };
   }, []);
 
   const handleClearChat = () => {
@@ -688,9 +718,12 @@ export default function ChatDashboardScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
-          style={{ flex: 1 }}
+          style={{
+            flex: 1,
+            paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+          }}
         >
           {messages.length === 0 ? (
             <SuggestionsDeck onSelectSuggestion={(text) => handleSend(text)} />
@@ -795,6 +828,7 @@ export default function ChatDashboardScreen() {
             
             <View style={styles.inputContainer}>
               <TextInput
+                ref={textInputRef}
                 style={[
                   styles.textInput,
                   {
