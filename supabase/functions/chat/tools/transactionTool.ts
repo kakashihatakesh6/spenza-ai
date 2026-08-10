@@ -64,6 +64,11 @@ export function createTransactionTools(supabaseClient: any, userId: string, onLo
           queryBuilder = queryBuilder.lte('transaction_date', input.endDate);
         }
 
+        const filterCurr = (input.filterCurrency || '').toUpperCase();
+        if (filterCurr) {
+          queryBuilder = queryBuilder.eq('currency', filterCurr);
+        }
+
         const { data: expenses, error: searchErr } = await queryBuilder;
 
         if (searchErr) {
@@ -71,6 +76,10 @@ export function createTransactionTools(supabaseClient: any, userId: string, onLo
         }
 
         let filtered = expenses || [];
+        if (filterCurr) {
+          filtered = filtered.filter((e: any) => (e.currency || 'INR').toUpperCase() === filterCurr);
+        }
+
         if (input.query) {
           const q = input.query.toLowerCase();
           filtered = filtered.filter((e: any) => 
@@ -138,8 +147,9 @@ export function createTransactionTools(supabaseClient: any, userId: string, onLo
         merchant: z.string().nullish().describe('Merchant name filter'),
         startDate: z.string().nullish().describe('Start date filter (YYYY-MM-DD)'),
         endDate: z.string().nullish().describe('End date filter (YYYY-MM-DD)'),
+        filterCurrency: z.string().nullish().describe('STRICT filter to return ONLY transactions originally recorded in this currency (e.g. GBP, INR, USD, EUR). If the user asks for transactions happened in GBP, set filterCurrency="GBP". Excludes all other currencies!'),
         targetCurrency: z.string().nullish().describe('Target currency code to display/convert transaction amounts in (e.g. GBP, INR, EUR, USD)'),
-        currency: z.string().nullish().describe('Alternative target currency code'),
+        currency: z.string().nullish().describe('Alternative target or filter currency code'),
         limit: z.number().nullish().describe('Max results limit')
       })
     }
