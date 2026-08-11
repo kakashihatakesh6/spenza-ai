@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import { Expense } from '../types';
 import { logger } from './logger';
+import { useNotificationStore } from '../store/notificationStore';
 
 export const exportService = {
   /**
@@ -53,6 +54,13 @@ export const exportService = {
 
     await writeAsStringAsync(filePath, csvContent, {
       encoding: EncodingType.UTF8,
+    });
+
+    useNotificationStore.getState().addNotification({
+      title: 'CSV Export Ready 📄',
+      message: `Your transaction report (${cleanName}) was generated successfully.`,
+      type: 'success',
+      categoryName: 'EXPORT',
     });
 
     return filePath;

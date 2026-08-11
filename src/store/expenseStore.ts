@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { Expense, Category, Budget } from '../types';
 import { expenseRepository } from '../database/repositories/expenseRepository';
 import { useAuthStore } from './authStore';
+import { useNotificationStore } from './notificationStore';
+import { useSettingsStore } from './settingsStore';
 import { dbService } from '../services/expense.service';
 import { storageService } from '../services/storage.service';
 import { budgetService } from '../services/budget.service';
@@ -24,6 +26,84 @@ interface ExpenseState {
   saveBudget: (budget: Budget) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
 }
+
+const checkBudgetThresholds = async (expenses: Expense[], budgets: Budget[], categoryName: string) => {
+  try {
+    let currentBudgets = budgets;
+    if (!currentBudgets || currentBudgets.length === 0) {
+      currentBudgets = useExpenseStore.getState().budgets;
+    }
+    if (!currentBudgets || currentBudgets.length === 0) {
+      try {
+        await useExpenseStore.getState().fetchBudgets();
+        currentBudgets = useExpenseStore.getState().budgets;
+      } catch {}
+    }
+    if (!currentBudgets || currentBudgets.length === 0) return;
+
+    const matchingBudgets = currentBudgets.filter(
+      (b) => b.category.toLowerCase() === categoryName.toLowerCase() || b.category.toLowerCase() === 'all'
+    );
+
+    if (matchingBudgets.length === 0) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const currentMonthStr = todayStr.slice(0, 7);
+    const currentYearStr = todayStr.slice(0, 4);
+
+    const userCurr = useSettingsStore.getState().settings.currency || 'INR';
+    const symbol = userCurr === 'GBP' ? '£' : userCurr === 'USD' ? '$' : userCurr === 'EUR' ? '€' : '₹';
+
+    for (const b of matchingBudgets) {
+      if (b.amount <= 0) continue;
+
+      let periodExpenses = expenses;
+
+      if (b.period === 'weekly') {
+        const today = new Date();
+        const currentDay = today.getDay();
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - currentDay);
+        const startStr = sunday.toISOString().split('T')[0];
+        periodExpenses = expenses.filter((e) => e.date >= startStr);
+      } else if (b.period === 'yearly') {
+        periodExpenses = expenses.filter((e) => e.date.startsWith(currentYearStr));
+      } else {
+        // monthly default
+        periodExpenses = expenses.filter((e) => e.date.startsWith(currentMonthStr));
+      }
+
+      if (b.category.toLowerCase() !== 'all') {
+        periodExpenses = periodExpenses.filter((e) => e.category.toLowerCase() === categoryName.toLowerCase());
+      }
+
+      const totalSpent = periodExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0);
+      const limit = b.amount;
+      const percentage = Math.round((totalSpent / limit) * 100);
+
+      const targetLabel = b.category.toLowerCase() === 'all' ? 'Overall' : categoryName;
+
+      if (totalSpent > limit) {
+        const overAmount = (totalSpent - limit).toFixed(0);
+        useNotificationStore.getState().addNotification({
+          title: `Budget Exceeded!`,
+          message: `You have exceeded your ${targetLabel} budget by ${symbol}${overAmount}.`,
+          type: 'warning',
+          categoryName: 'BUDGET',
+        });
+      } else if (percentage >= 80) {
+        useNotificationStore.getState().addNotification({
+          title: `Budget Warning: ${targetLabel}`,
+          message: `You've used ${percentage}% of your ${targetLabel} budget (${symbol}${totalSpent.toFixed(0)} / ${symbol}${limit}).`,
+          type: 'warning',
+          categoryName: 'BUDGET',
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to check budget thresholds', err);
+  }
+};
 
 export const useExpenseStore = create<ExpenseState>((set, get) => ({
   expenses: [],
@@ -131,6 +211,7 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
         }));
       }
       logger.info('Expense created', { expenseId: expense.id });
+      checkBudgetThresholds(get().expenses, get().budgets, expense.category);
     } catch (error) {
       logger.error('Error adding expense', error);
     }
@@ -183,6 +264,7 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
         }));
       }
       logger.info('Expense updated', { expenseId: expense.id });
+      checkBudgetThresholds(get().expenses, get().budgets, expense.category);
     } catch (error) {
       logger.error('Error updating expense', error);
     }

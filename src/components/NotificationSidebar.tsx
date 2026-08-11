@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { useNotificationStore, NotificationItem } from '../store/notificationStore';
+import { useAlertStore } from '../store/alertStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import {
@@ -124,7 +125,26 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
   const notifications = useNotificationStore((state) => state.notifications);
   const markAsRead = useNotificationStore((state) => state.markAsRead);
   const deleteNotification = useNotificationStore((state) => state.deleteNotification);
+  const clearAll = useNotificationStore((state) => state.clearAll);
   const loadNotifications = useNotificationStore((state) => state.loadNotifications);
+
+  const handleClearAll = () => {
+    useAlertStore.getState().showAlert(
+      'Clear All Notifications',
+      'Are you sure you want to delete all notifications?',
+      'warning',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: () => {
+            clearAll();
+          },
+        },
+      ]
+    );
+  };
 
   useEffect(() => {
     if (visible) {
@@ -161,6 +181,7 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
   };
 
   const filteredNotifications = notifications.filter((n) => {
+    if (!n.title?.trim() && !n.message?.trim()) return false;
     if (filter === 'unread') return !n.read;
     return true;
   });
@@ -268,67 +289,84 @@ export const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
               </View>
             </View>
 
-            {/* Filter Pill Tabs - ALWAYS PRESENT EVEN IF 0 NOTIFICATIONS */}
+            {/* Filter Pill Tabs Row with Clear All button on the right */}
             <View style={[styles.pillTabsRow, { backgroundColor: colors.background }]}>
-              <TouchableOpacity
-                style={[
-                  styles.pillTab,
-                  filter === 'all'
-                    ? [
-                        styles.pillTabActive,
-                        { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
-                      ]
-                    : [
-                        styles.pillTabInactive,
-                        { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
-                      ],
-                ]}
-                onPress={() => setFilter('all')}
-                activeOpacity={0.8}
-              >
-                <Text
+              <View style={styles.leftPillsGroup}>
+                <TouchableOpacity
                   style={[
-                    styles.pillTabText,
-                    {
-                      color: filter === 'all'
-                        ? (isDark ? '#34D399' : '#046B5C')
-                        : colors.text,
-                    },
+                    styles.pillTab,
+                    filter === 'all'
+                      ? [
+                          styles.pillTabActive,
+                          { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
+                        ]
+                      : [
+                          styles.pillTabInactive,
+                          { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
+                        ],
                   ]}
+                  onPress={() => setFilter('all')}
+                  activeOpacity={0.8}
                 >
-                  All
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.pillTabText,
+                      {
+                        color: filter === 'all'
+                          ? (isDark ? '#34D399' : '#046B5C')
+                          : colors.text,
+                      },
+                    ]}
+                  >
+                    All
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.pillTab,
-                  filter === 'unread'
-                    ? [
-                        styles.pillTabActive,
-                        { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
-                      ]
-                    : [
-                        styles.pillTabInactive,
-                        { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
-                      ],
-                ]}
-                onPress={() => setFilter('unread')}
-                activeOpacity={0.8}
-              >
-                <Text
+                <TouchableOpacity
                   style={[
-                    styles.pillTabText,
-                    {
-                      color: filter === 'unread'
-                        ? (isDark ? '#34D399' : '#046B5C')
-                        : colors.text,
-                    },
+                    styles.pillTab,
+                    filter === 'unread'
+                      ? [
+                          styles.pillTabActive,
+                          { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.18)' : '#E6F4F1' },
+                        ]
+                      : [
+                          styles.pillTabInactive,
+                          { borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#1E293B' },
+                        ],
                   ]}
+                  onPress={() => setFilter('unread')}
+                  activeOpacity={0.8}
                 >
-                  Unread
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.pillTabText,
+                      {
+                        color: filter === 'unread'
+                          ? (isDark ? '#34D399' : '#046B5C')
+                          : colors.text,
+                      },
+                    ]}
+                  >
+                    Unread
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Clear All Button on the Right */}
+              {notifications.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.clearAllBtn,
+                    { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2' },
+                  ]}
+                  onPress={handleClearAll}
+                  activeOpacity={0.75}
+                >
+                  <Trash2 size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Notifications Content */}
@@ -472,16 +510,33 @@ const styles = StyleSheet.create({
     height: 40,
   },
 
-  // Pill Tabs (All, Unread) matching screenshot
+  // Pill Tabs (All, Unread) with Clear All button on the right
   pillTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
+  leftPillsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  clearAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
   pillTab: {
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 24,
     justifyContent: 'center',

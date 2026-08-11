@@ -32,6 +32,9 @@ export const useAlertStore = create<AlertState>((set) => ({
   buttons: [],
 
   showAlert: (title, message, type = 'info', buttons = []) => {
+    if (!title?.trim() && !message?.trim()) {
+      return;
+    }
     set({
       visible: true,
       title,

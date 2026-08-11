@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authService } from '../services/auth.service';
 import { sessionService } from '../services/session.service';
 import { useAlertStore } from './alertStore';
+import { useNotificationStore } from './notificationStore';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { logger } from '../services/logger';
@@ -18,6 +19,9 @@ interface AuthState {
   setSession: (session: Session | null) => void;
   updateProfile: (username: string, avatarUrl?: string, extraMetadata?: Record<string, any>) => Promise<void>;
 }
+
+let hasHandledRevocation = false;
+let knownDeviceIds: string[] | null = null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -43,6 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (event === 'INITIAL_SESSION' && session) {
           logger.info('Session restored');
         } else if (event === 'SIGNED_IN') {
+          hasHandledRevocation = false;
           logger.info('Session restored / signed in');
         } else if (event === 'SIGNED_OUT') {
           logger.info('User signed out');
@@ -121,19 +126,47 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // 2. Verify if current device ID is still in active_devices list in user_metadata
       const deviceId = await sessionService.getDeviceId();
       const activeDevices: any[] = user.user_metadata?.active_devices || [];
+
       if (activeDevices.length > 0) {
         const isStillActive = activeDevices.some((d) => d.id === deviceId);
+
         if (!isStillActive) {
-          logger.info('Device session terminated remotely from active_devices');
-          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-          set({ user: null, session: null });
-          useAlertStore.getState().showAlert(
-            'Session Terminated',
-            'This device was signed out from Active Login Devices in Security Center.',
-            'warning'
-          );
+          if (!hasHandledRevocation) {
+            hasHandledRevocation = true;
+            logger.info('Device session terminated remotely from active_devices');
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+            set({ user: null, session: null });
+            useNotificationStore.getState().addNotification({
+              title: 'Security Alert: Device Terminated',
+              message: 'This device was signed out from Active Login Devices in Security Center.',
+              type: 'security',
+              categoryName: 'SECURITY',
+            });
+            useAlertStore.getState().showAlert(
+              'Session Terminated',
+              'This device was signed out from Active Login Devices in Security Center.',
+              'warning'
+            );
+          }
           return false;
         }
+
+        // Check if any NEW device logged into the account (detected on Device A)
+        const currentDeviceIds = activeDevices.map((d) => d.id);
+        if (knownDeviceIds !== null) {
+          const newDevices = activeDevices.filter(
+            (d) => d.id !== deviceId && !knownDeviceIds!.includes(d.id)
+          );
+          for (const newDev of newDevices) {
+            useNotificationStore.getState().addNotification({
+              title: 'New Device Signed In',
+              message: `A new device (${newDev.device || 'Mobile Device'}) signed in to your account.`,
+              type: 'warning',
+              categoryName: 'SECURITY',
+            });
+          }
+        }
+        knownDeviceIds = currentDeviceIds;
       }
 
       // Only update state if user object metadata changed to avoid unnecessary re-renders

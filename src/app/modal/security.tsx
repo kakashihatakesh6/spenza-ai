@@ -14,6 +14,7 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useNotificationStore } from '../../store/notificationStore';
 import { useAuthStore } from '../../store/authStore';
 import { authService } from '../../services/auth.service';
 import { supabase } from '../../lib/supabase';
@@ -202,6 +203,12 @@ export default function SecurityScreen() {
       setNewPassword('');
       setConfirmPassword('');
 
+      useNotificationStore.getState().addNotification({
+        title: 'Password Updated',
+        message: 'Your account password was updated successfully.',
+        type: 'success',
+        categoryName: 'SECURITY',
+      });
       useAlertStore.getState().showAlert('Success', 'Your password has been updated successfully.', 'success');
     } catch (e: any) {
       setIsUpdatingPassword(false);
@@ -226,6 +233,12 @@ export default function SecurityScreen() {
               await authService.signOutOthers();
               const updated = await authService.getActiveSessions();
               setSessions(updated);
+              useNotificationStore.getState().addNotification({
+                title: 'Security Alert: Device Terminated',
+                message: 'Terminated all other active device sessions from Security Center.',
+                type: 'security',
+                categoryName: 'SECURITY',
+              });
               useAlertStore.getState().showAlert('Success', 'Successfully terminated all other sessions.', 'success');
             } catch (err: any) {
               logger.error('Failed to terminate other sessions', err);
@@ -253,6 +266,12 @@ export default function SecurityScreen() {
             try {
               setIsLoadingSessions(true);
               await authService.terminateSession(session.id);
+              useNotificationStore.getState().addNotification({
+                title: 'Security Alert: Device Terminated',
+                message: `Terminated session for ${session.device} from Security Center.`,
+                type: 'security',
+                categoryName: 'SECURITY',
+              });
               if (session.isCurrent) {
                 useAlertStore.getState().showAlert('Signed Out', 'You have been signed out of this device.', 'info');
                 router.replace('/auth/login');
