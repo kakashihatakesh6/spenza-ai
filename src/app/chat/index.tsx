@@ -724,10 +724,7 @@ export default function ChatDashboardScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
-          style={{
-            flex: 1,
-            paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
-          }}
+          style={{ flex: 1 }}
         >
           {messages.length === 0 ? (
             <SuggestionsDeck onSelectSuggestion={(text) => handleSend(text)} />
@@ -820,7 +817,7 @@ export default function ChatDashboardScreen() {
               {
                 borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
                 backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
-                paddingBottom: Math.max(insets.bottom, 12),
+                paddingBottom: keyboardHeight > 0 ? 10 : Math.max(insets.bottom, 12),
               },
             ]}
           >
