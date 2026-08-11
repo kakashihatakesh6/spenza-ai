@@ -4,7 +4,7 @@ import { logger } from './logger';
 
 export const notificationDbService = {
   /**
-   * Save a notification to Supabase database table `user_notifications` (with user_metadata fallback)
+   * Save a notification strictly to Supabase database table `user_notifications`
    */
   async saveNotificationToDb(notification: Omit<NotificationItem, 'id' | 'time' | 'read'>, userId: string): Promise<void> {
     if (!userId) return;
@@ -19,27 +19,7 @@ export const notificationDbService = {
       });
 
       if (error) {
-        // Fallback: If user_notifications table doesn't exist yet, save to user_metadata
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const current: NotificationItem[] = user.user_metadata?.notifications || [];
-          const updated = [
-            {
-              id: Date.now().toString() + Math.random().toString(36).substring(7),
-              title: notification.title,
-              message: notification.message,
-              type: notification.type,
-              categoryName: notification.categoryName,
-              time: 'Just now',
-              read: false,
-            },
-            ...current,
-          ].slice(0, 50);
-
-          await supabase.auth.updateUser({
-            data: { notifications: updated },
-          }).catch(() => {});
-        }
+        logger.error('Failed to insert notification into user_notifications table', error);
       }
     } catch (err) {
       logger.warn('Failed to save notification to DB', err);
@@ -47,7 +27,7 @@ export const notificationDbService = {
   },
 
   /**
-   * Fetch persistent notifications from Supabase DB table or metadata
+   * Fetch persistent notifications strictly from Supabase database table `user_notifications`
    */
   async fetchNotificationsFromDb(userId: string): Promise<NotificationItem[]> {
     if (!userId) return [];
@@ -59,7 +39,12 @@ export const notificationDbService = {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (!error && data && data.length > 0) {
+      if (error) {
+        logger.error('Failed to fetch notifications from user_notifications table', error);
+        return [];
+      }
+
+      if (data && data.length > 0) {
         return data.map((row: any) => ({
           id: row.id || String(Date.now()),
           title: row.title,
@@ -70,12 +55,6 @@ export const notificationDbService = {
           read: !!row.read,
         }));
       }
-
-      // Fallback to user_metadata notifications if table isn't populated
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.user_metadata?.notifications) {
-        return user.user_metadata.notifications;
-      }
     } catch (err) {
       logger.warn('Failed to fetch notifications from DB', err);
     }
@@ -83,34 +62,38 @@ export const notificationDbService = {
   },
 
   /**
-   * Mark all notifications as read in DB
+   * Mark all notifications as read in Supabase database table `user_notifications`
    */
   async markAllAsReadInDb(userId: string): Promise<void> {
     if (!userId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('user_notifications')
         .update({ read: true })
         .eq('user_id', userId);
+
+      if (error) {
+        logger.error('Failed to mark notifications read in user_notifications table', error);
+      }
     } catch (err) {
       logger.warn('Failed to mark notifications read in DB', err);
     }
   },
 
   /**
-   * Clear all notifications in DB and metadata
+   * Clear all notifications in Supabase database table `user_notifications`
    */
   async clearAllInDb(userId: string): Promise<void> {
     if (!userId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('user_notifications')
         .delete()
         .eq('user_id', userId);
 
-      await supabase.auth.updateUser({
-        data: { notifications: [] },
-      }).catch(() => {});
+      if (error) {
+        logger.error('Failed to clear notifications in user_notifications table', error);
+      }
     } catch (err) {
       logger.warn('Failed to clear notifications in DB', err);
     }

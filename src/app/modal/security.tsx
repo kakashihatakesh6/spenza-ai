@@ -1,44 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useNavigation, useRouter } from 'expo-router';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  Switch,
-  TextInput,
-  ScrollView,
-  Alert,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter, useNavigation } from 'expo-router';
-import { useTheme } from '../../hooks/useTheme';
-import { useAlertStore } from '../../store/alertStore';
-import { useNotificationStore } from '../../store/notificationStore';
-import { useAuthStore } from '../../store/authStore';
-import { authService } from '../../services/auth.service';
-import { supabase } from '../../lib/supabase';
-import { Header } from '../../components/Header';
-import { logger } from '../../services/logger';
-import { useSettingsStore } from '../../store/settingsStore';
-import { biometricService, BiometricStatus } from '../../services/biometric.service';
-import {
-  ArrowLeft,
-  Shield,
-  Smartphone,
-  Globe,
-  Trash2,
-  Lock,
-  CheckCircle,
+  Check,
   Eye,
   EyeOff,
-  Globe as GoogleIcon,
   Fingerprint,
-  Check,
-  Sparkles,
+  Globe,
+  Globe as GoogleIcon,
+  Lock,
   RefreshCw,
-  AlertCircle,
+  Shield,
+  Smartphone,
+  Trash2
 } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { Header } from '../../components/Header';
+import { useTheme } from '../../hooks/useTheme';
+import { supabase } from '../../lib/supabase';
+import { authService } from '../../services/auth.service';
+import { biometricService, BiometricStatus } from '../../services/biometric.service';
+import { logger } from '../../services/logger';
+import { useAlertStore } from '../../store/alertStore';
+import { useAuthStore } from '../../store/authStore';
+import { useNotificationStore } from '../../store/notificationStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 import { SessionItem } from '../../services/session.service';
 
@@ -266,12 +261,6 @@ export default function SecurityScreen() {
             try {
               setIsLoadingSessions(true);
               await authService.terminateSession(session.id);
-              useNotificationStore.getState().addNotification({
-                title: 'Security Alert: Device Terminated',
-                message: `Terminated session for ${session.device} from Security Center.`,
-                type: 'security',
-                categoryName: 'SECURITY',
-              });
               if (session.isCurrent) {
                 useAlertStore.getState().showAlert('Signed Out', 'You have been signed out of this device.', 'info');
                 router.replace('/auth/login');
@@ -378,8 +367,8 @@ export default function SecurityScreen() {
                         {isTestingBiometric
                           ? 'Testing Sensor...'
                           : testResult === 'success'
-                          ? 'Test Passed!'
-                          : 'Test Fingerprint Sensor'}
+                            ? 'Test Passed!'
+                            : 'Test Fingerprint Sensor'}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -423,7 +412,7 @@ export default function SecurityScreen() {
         <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
           {isGoogleUser ? 'Set Account Password' : 'Update Password'}
         </Text>
-        
+
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {isGoogleUser && (
             <View style={{
@@ -540,7 +529,7 @@ export default function SecurityScreen() {
                   <View style={[styles.sessionIconBg, { backgroundColor: colors.primaryLight }]}>
                     {getPlatformIcon(session.type)}
                   </View>
-                  
+
                   <View style={styles.sessionDetails}>
                     <View style={styles.sessionTitleRow}>
                       <Text style={[styles.sessionDevice, { color: colors.text }]}>
