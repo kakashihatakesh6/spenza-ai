@@ -70,6 +70,21 @@ export const chatService = {
   },
 
   /**
+   * Deletes all chat conversations for a specific user (cascade deletes all messages).
+   */
+  async clearUserChat(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('chat_conversations')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      logger.error('Failed to clear user chat history', error);
+      throw error;
+    }
+  },
+
+  /**
    * Deletes a conversation and all its messages (due to cascade constraints).
    */
   async deleteConversation(conversationId: string): Promise<void> {
@@ -130,11 +145,11 @@ export const chatService = {
    * Handles packet fragmentation, token emissions, citations, and completion event.
    */
   streamChatMessage(
-    conversationId: string,
+    conversationId: string | null | undefined,
     message: string,
     onToken: (token: string) => void,
     onCitations: (citations: MessageCitation[]) => void,
-    onDone: (data: { message_id: string; token_usage?: any }) => void,
+    onDone: (data: { message_id: string; conversation_id?: string; token_usage?: any }) => void,
     onError: (error: Error) => void
   ): { abort: () => void } {
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';

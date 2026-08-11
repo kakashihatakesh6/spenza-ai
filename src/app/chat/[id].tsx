@@ -1,47 +1,46 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  TextInput,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import { useTheme } from '../../hooks/useTheme';
-import { useChatStore } from '../../store/chatStore';
-import { useExpenseStore } from '../../store/expenseStore';
-import { useAlertStore } from '../../store/alertStore';
-import { exportService } from '../../services/exportService';
-import { Header } from '../../components/Header';
-import { BotAvatar } from '../../components/BotAvatar';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  Send,
-  CornerDownLeft,
-  XCircle,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  Info,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
-  FileSpreadsheet,
+  Info,
+  Send,
+  ThumbsDown,
+  ThumbsUp,
+  XCircle
 } from 'lucide-react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BotAvatar } from '../../components/BotAvatar';
+import { Header } from '../../components/Header';
+import { useTheme } from '../../hooks/useTheme';
+import { exportService } from '../../services/exportService';
+import { useAlertStore } from '../../store/alertStore';
+import { useChatStore } from '../../store/chatStore';
+import { useExpenseStore } from '../../store/expenseStore';
 
 export default function ChatSessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { colors, isDark } = useTheme();
-  
+
   const {
     messages,
     activeConversation,
@@ -50,6 +49,7 @@ export default function ChatSessionScreen() {
     streamingCitations,
     isOnline,
     selectConversation,
+    clearChat,
     sendMessage,
     cancelStreaming,
     submitFeedback,
@@ -58,10 +58,38 @@ export default function ChatSessionScreen() {
   const [inputVal, setInputVal] = useState('');
   const [sending, setSending] = useState(false);
   const [expandedCitationsMsgId, setExpandedCitationsMsgId] = useState<Record<string, boolean>>({});
+
+  const handleClearChat = () => {
+    Alert.alert(
+      'Clear Chat History',
+      'Are you sure you want to clear all chatbot conversation history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Chat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isStreaming) {
+                cancelStreaming();
+              }
+              await clearChat();
+              useAlertStore.getState().showAlert('Chat Cleared', 'Your chatbot history has been successfully cleared.', 'success');
+              router.replace('/chat');
+            } catch (err: any) {
+              useAlertStore.getState().showAlert('Error', 'Failed to clear chat history: ' + (err?.message || 'Error'), 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
-  
+
   const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
   const userScrolledUpRef = useRef<boolean>(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Load conversation messages on mount
   useEffect(() => {
@@ -78,6 +106,44 @@ export default function ChatSessionScreen() {
       }, 100);
     }
   }, [messages, streamingMessageText]);
+
+  // Dynamic native keyboard listener & app lifecycle resume handler
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      const kh = e?.endCoordinates?.height || 0;
+      setKeyboardHeight(kh);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    };
+
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        textInputRef.current?.blur();
+        Keyboard.dismiss();
+        setKeyboardHeight(0);
+      } else if (nextAppState === 'active') {
+        textInputRef.current?.blur();
+        setKeyboardHeight(0);
+      }
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      appStateSub.remove();
+    };
+  }, []);
 
   const handleScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -172,6 +238,15 @@ export default function ChatSessionScreen() {
     }
   };
 
+  const handleInputChange = (text: string) => {
+    setInputVal(text);
+    userScrolledUpRef.current = false;
+    setShowScrollBottomBtn(false);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  };
+
   const handleCopyMessage = async (text: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied', 'Response copied to clipboard.');
@@ -220,7 +295,7 @@ export default function ChatSessionScreen() {
   const renderMessageContentText = (text: string, citationsList: any[]) => {
     // Split by brackets e.g. [1], [2], etc.
     const parts = text.split(/(\[\d+\])/g);
-    
+
     return parts.map((part, partIdx) => {
       const match = part.match(/^\[(\d+)\]$/);
       if (match && citationsList && citationsList.length > 0) {
@@ -333,7 +408,7 @@ export default function ChatSessionScreen() {
           ) : (
             <View>
               {renderFormattedMarkdown(item.content, item.citations)}
-              
+
               {csvItems && (
                 <TouchableOpacity
                   style={[
@@ -352,7 +427,7 @@ export default function ChatSessionScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-              
+
               {/* Citations / Sources list section */}
               {hasCitations && (
                 <View style={[styles.citationsContainer, { borderTopColor: colors.border }]}>
@@ -450,12 +525,17 @@ export default function ChatSessionScreen() {
           }
           router.back();
         }}
+        rightIcon="trash-2"
+        onRightPress={handleClearChat}
       />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+        }}
       >
         <View style={{ flex: 1 }}>
           <FlatList
@@ -551,9 +631,10 @@ export default function ChatSessionScreen() {
               Cannot send messages while offline. Check connection.
             </Text>
           )}
-          
+
           <View style={styles.inputContainer}>
             <TextInput
+              ref={textInputRef}
               style={[
                 styles.textInput,
                 {
@@ -565,11 +646,16 @@ export default function ChatSessionScreen() {
               placeholder={isOnline ? "Ask Spendly AI about policies..." : "Offline - typing disabled"}
               placeholderTextColor={colors.textSecondary}
               value={inputVal}
-              onChangeText={setInputVal}
+              onChangeText={handleInputChange}
               onFocus={() => {
+                userScrolledUpRef.current = false;
+                setShowScrollBottomBtn(false);
                 setTimeout(() => {
                   flatListRef.current?.scrollToEnd({ animated: true });
-                }, 150);
+                }, 50);
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, 250);
               }}
               editable={isOnline && !sending && !isStreaming}
               multiline

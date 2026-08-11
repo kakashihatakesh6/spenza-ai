@@ -26,6 +26,7 @@ import { aiService } from '../../services/aiService';
 import { useExpenseStore } from '../../store/expenseStore';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useNotificationStore } from '../../store/notificationStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useCurrencyStore } from '../../store/currencyStore';
 import { expenseHelpers } from '../../utils/expenseHelpers';
@@ -348,6 +349,13 @@ export default function OCRScanModal() {
       tax: tax ? parseFloat(tax) : 0,
       notes: 'Logged via Receipt Scanner OCR',
       receiptImage: photoUri || undefined,
+    });
+
+    useNotificationStore.getState().addNotification({
+      title: 'Receipt Processed 🧾',
+      message: `Scanned receipt from ${merchant.trim()} for ${parsedAmount} added to ${category || 'Other'}.`,
+      type: 'success',
+      categoryName: 'RECEIPT',
     });
 
     useAlertStore.getState().showAlert('Success', 'Extracted expense logged successfully!', 'success');

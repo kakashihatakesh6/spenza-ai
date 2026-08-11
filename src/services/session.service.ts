@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { logger } from './logger';
+import { useNotificationStore } from '../store/notificationStore';
 
 export interface SessionItem {
   id: string;
@@ -120,6 +121,7 @@ export const sessionService = {
 
       // If current device is already registered and updated within last 30 minutes, skip API update to avoid event loops
       const existing = storedDevices.find((d) => d.id === deviceId);
+
       if (existing) {
         const lastActiveTime = new Date(existing.lastActiveAt || 0).getTime();
         const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;

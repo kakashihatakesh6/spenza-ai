@@ -1,49 +1,46 @@
+import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
+import {
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  FileSpreadsheet,
+  Info,
+  Send,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  User,
+  XCircle
+} from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  TextInput,
   ActivityIndicator,
   Alert,
+  Animated,
+  AppState,
+  FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
+import { BotAvatar } from '../../components/BotAvatar';
+import { Header } from '../../components/Header';
 import { useTheme } from '../../hooks/useTheme';
+import { exportService } from '../../services/exportService';
+import { useAlertStore } from '../../store/alertStore';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { useExpenseStore } from '../../store/expenseStore';
-import { useAlertStore } from '../../store/alertStore';
-import { exportService } from '../../services/exportService';
-import { Header } from '../../components/Header';
-import { BotAvatar } from '../../components/BotAvatar';
-import {
-  Send,
-  XCircle,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
-  Scan,
-  TrendingUp,
-  MessageSquare,
-  Bot,
-  BarChart3,
-  Wallet,
-  User,
-  Download,
-  FileSpreadsheet,
-} from 'lucide-react-native';
 
 // Entry animation for message items
 const AnimatedMessageItem = ({ children, isUser }: { children: React.ReactNode; isUser: boolean }) => {
@@ -151,7 +148,7 @@ const SuggestionsDeck = ({ onSelectSuggestion }: { onSelectSuggestion: (text: st
         <Text style={[styles.suggestionsHeaderSub, { color: colors.textSecondary }]}>
           Ask about Spendly features, offline guides, policies, or select a query below:
         </Text>
-        
+
         <View style={styles.suggestionsGrid}>
           {suggestions.map((item, idx) => {
             const IconComp = item.icon;
@@ -207,6 +204,7 @@ export default function ChatDashboardScreen() {
     loadConversations,
     selectConversation,
     startNewConversation,
+    clearChat,
     sendMessage,
     cancelStreaming,
     submitFeedback,
@@ -217,63 +215,120 @@ export default function ChatDashboardScreen() {
   const [initializing, setInitializing] = useState(true);
   const [expandedCitationsMsgId, setExpandedCitationsMsgId] = useState<Record<string, boolean>>({});
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
-  
-  const flatListRef = useRef<FlatList>(null);
-  const userScrolledUpRef = useRef<boolean>(false);
 
-  // Initialize and load chat session silently on mount (using user?.id to prevent object ref re-renders)
+  const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
+  const userScrolledUpRef = useRef<boolean>(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Deterministic single-pass initialization flow on mount / user change
   useEffect(() => {
     initializeChatStore();
-    
+    let isMounted = true;
+
     const initChatSession = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        if (isMounted) setInitializing(false);
+        return;
+      }
+
+      setInitializing(true);
       try {
-        await loadConversations();
+        // 1. Fetch user conversations from Supabase
+        const convs = await loadConversations();
+
+        if (!isMounted) return;
+
+        // 2. Identify target active conversation
+        const active = useChatStore.getState().activeConversation;
+        const mainConv = convs.find(
+          (c) => c.title === 'Spendly AI Assistant' || c.title.includes('AI Assistant')
+        ) || convs[0];
+
+        const targetConv = (active && convs.some((c) => c.id === active.id)) ? active : mainConv;
+
+        // 3. Load messages for target conversation if available
+        if (targetConv) {
+          await selectConversation(targetConv.id);
+        }
       } catch (err) {
-        console.warn('Failed to load conversations:', err);
+        console.warn('[Chat] Failed to initialize chat session:', err);
+      } finally {
+        if (isMounted) {
+          setInitializing(false);
+        }
       }
     };
 
     initChatSession();
-    return () => cleanupChatStore();
+    return () => {
+      isMounted = false;
+      cleanupChatStore();
+    };
   }, [user?.id]);
 
-  // Set active conversation silently when list loads
+  // Dynamic native keyboard listener & app lifecycle resume handler
   useEffect(() => {
-    const autoSetupConversation = async () => {
-      if (!user?.id || isLoadingConvs || !initializing) return;
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-      try {
-        // If active conversation is already loaded, finish initialization without wiping messages
-        if (activeConversation) {
-          setInitializing(false);
-          return;
-        }
-
-        // Find existing main chat session
-        const mainConv = conversations.find(
-          (c) => c.title === 'Spendly AI Assistant' || c.title.includes('AI Assistant')
-        ) || conversations[0];
-
-        if (mainConv) {
-          await selectConversation(mainConv.id);
-        } else {
-          // If no sessions, create one silently
-          console.log('[Chat] Creating new default chatbot session...');
-          const newId = await startNewConversation(user.id, 'Spendly AI Assistant');
-          await selectConversation(newId);
-        }
-      } catch (err) {
-        console.error('Error auto-setting up chat session:', err);
-      } finally {
-        setInitializing(false);
-      }
+    const onShow = (e: any) => {
+      const kh = e?.endCoordinates?.height || 0;
+      setKeyboardHeight(kh);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
     };
 
-    if (conversations.length >= 0 && !isLoadingConvs && user?.id) {
-      autoSetupConversation();
-    }
-  }, [conversations, isLoadingConvs, user?.id, activeConversation, initializing]);
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        textInputRef.current?.blur();
+        Keyboard.dismiss();
+        setKeyboardHeight(0);
+      } else if (nextAppState === 'active') {
+        textInputRef.current?.blur();
+        setKeyboardHeight(0);
+      }
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      appStateSub.remove();
+    };
+  }, []);
+
+  const handleClearChat = () => {
+    Alert.alert(
+      'Clear Chat History',
+      'Are you sure you want to clear all chatbot conversation history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Chat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isStreaming) {
+                cancelStreaming();
+              }
+              await clearChat();
+              useAlertStore.getState().showAlert('Chat Cleared', 'Your chatbot history has been successfully cleared.', 'success');
+            } catch (err: any) {
+              useAlertStore.getState().showAlert('Error', 'Failed to clear chat history: ' + (err?.message || 'Error'), 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Non-blocking auto-scroll: auto-scroll to bottom only if user hasn't manually scrolled up
   useEffect(() => {
@@ -377,6 +432,15 @@ export default function ChatDashboardScreen() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleInputChange = (text: string) => {
+    setInputVal(text);
+    userScrolledUpRef.current = false;
+    setShowScrollBottomBtn(false);
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
   };
 
   const handleCopyMessage = async (text: string) => {
@@ -535,7 +599,7 @@ export default function ChatDashboardScreen() {
             ) : (
               <View>
                 {renderFormattedMarkdown(item.content, item.citations)}
-                
+
                 {csvItems && (
                   <TouchableOpacity
                     style={[
@@ -647,6 +711,8 @@ export default function ChatDashboardScreen() {
           }
           router.back();
         }}
+        rightIcon="trash-2"
+        onRightPress={handleClearChat}
       />
 
       {initializing || isLoadingMsgs ? (
@@ -658,7 +724,10 @@ export default function ChatDashboardScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
-          style={{ flex: 1 }}
+          style={{
+            flex: 1,
+            paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+          }}
         >
           {messages.length === 0 ? (
             <SuggestionsDeck onSelectSuggestion={(text) => handleSend(text)} />
@@ -760,9 +829,10 @@ export default function ChatDashboardScreen() {
                 Cannot send messages while offline. Check connection.
               </Text>
             )}
-            
+
             <View style={styles.inputContainer}>
               <TextInput
+                ref={textInputRef}
                 style={[
                   styles.textInput,
                   {
@@ -774,11 +844,16 @@ export default function ChatDashboardScreen() {
                 placeholder={isOnline ? "Ask Spendly AI about policies..." : "Offline - typing disabled"}
                 placeholderTextColor={colors.textSecondary}
                 value={inputVal}
-                onChangeText={setInputVal}
+                onChangeText={handleInputChange}
                 onFocus={() => {
+                  userScrolledUpRef.current = false;
+                  setShowScrollBottomBtn(false);
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: true });
-                  }, 150);
+                  }, 50);
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 250);
                 }}
                 editable={isOnline && !sending && !isStreaming}
                 multiline
@@ -990,7 +1065,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  
+
   // Suggestions Deck Styling
   suggestionsContainer: {
     flex: 1,

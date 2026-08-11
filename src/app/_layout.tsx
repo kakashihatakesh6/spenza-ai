@@ -12,7 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { useNotificationStore } from '../store/notificationStore';
+import { useNotificationStore, subscribeRealtimeNotifications } from '../store/notificationStore';
 import { SplashScreen } from '../components/SplashScreen';
 import { BiometricLockScreen } from '../components/BiometricLockScreen';
 import * as ExpoSplashScreen from 'expo-splash-screen';
@@ -44,18 +44,10 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
-  const biometricsEnabled = useSettingsStore((state) => state.settings.biometricsEnabled);
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
   const initialLockSet = useRef<boolean>(false);
   const [appReadyLogged, setAppReadyLogged] = useState(false);
   const prevSegments = useRef<string[]>([]);
-
-  useEffect(() => {
-    if (!initialLockSet.current && biometricsEnabled && user) {
-      setIsAppLocked(true);
-      initialLockSet.current = true;
-    }
-  }, [biometricsEnabled, user]);
 
   useEffect(() => {
     logger.info('App launched');
@@ -69,9 +61,12 @@ function RootLayoutNav() {
     fetchCategories();
     fetchBudgets();
 
-    // Check biometrics initial lock state right after settings fetch
-    if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-      setIsAppLocked(true);
+    // Check biometrics lock state on cold start app launch only
+    if (!initialLockSet.current) {
+      initialLockSet.current = true;
+      if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+        setIsAppLocked(true);
+      }
     }
 
     // Fetch dynamic exchange rates from API
@@ -84,30 +79,54 @@ function RootLayoutNav() {
 
     // 4. Load persisted notification history
     useNotificationStore.getState().loadNotifications();
+  }, []);
 
+  // Real-time multi-device notifications listener
+  useEffect(() => {
+    if (user?.id) {
+      const unsubscribe = subscribeRealtimeNotifications(user.id);
+      return unsubscribe;
+    }
+  }, [user?.id]);
+
+  // Periodic active device session revocation check (every 10 seconds)
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(() => {
+      useAuthStore.getState().validateSession();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  useEffect(() => {
     // AppState listener
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         logger.info('App resumed');
         useAuthStore.getState().validateSession();
-        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-          setIsAppLocked(true);
-        }
       } else if (nextAppState === 'background') {
         logger.info('App moved to background');
-        if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-          setIsAppLocked(true);
-        }
       }
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
     // Network status listener
+    let wasOffline = false;
     const unsubscribeNetwork = networkMonitor.addListener((isOnline) => {
       if (isOnline) {
         logger.info('Internet restored');
         useAuthStore.getState().validateSession();
+        if (wasOffline) {
+          wasOffline = false;
+          useNotificationStore.getState().addNotification({
+            title: 'Offline Expenses Synced ☁️',
+            message: 'Your offline transactions have synced with cloud database.',
+            type: 'success',
+            categoryName: 'SYNC',
+          });
+        }
       } else {
+        wasOffline = true;
         logger.info('Offline detected');
       }
     });
@@ -119,39 +138,9 @@ function RootLayoutNav() {
       };
     }
 
-    // 5. Foreground Notification Listener
-    const foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
-      const { title, body, data } = notification.request.content;
-      const type = (data?.type as any) || 'info';
-      const categoryName = (data?.categoryName as string) || 'ALERT';
-
-      useNotificationStore.getState().addNotification({
-        title: title || 'Notification',
-        message: body || '',
-        type,
-        categoryName,
-      });
-    });
-
-    // 6. Background/Response Notification Listener (when tapped)
-    const backgroundSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const { title, body, data } = response.notification.request.content;
-      const type = (data?.type as any) || 'info';
-      const categoryName = (data?.categoryName as string) || 'ALERT';
-
-      useNotificationStore.getState().addNotification({
-        title: title || 'Notification',
-        message: body || '',
-        type,
-        categoryName,
-      });
-    });
-
     return () => {
       appStateSubscription.remove();
       unsubscribeNetwork();
-      foregroundSubscription.remove();
-      backgroundSubscription.remove();
     };
   }, []);
 

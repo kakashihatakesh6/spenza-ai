@@ -47,20 +47,11 @@ create table if not exists public.chat_messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 5. chat_feedback table
-create table if not exists public.chat_feedback (
-  message_id uuid primary key references public.chat_messages(id) on delete cascade,
-  is_positive boolean not null,
-  feedback_text text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
 -- Enable Row Level Security (RLS)
 alter table public.documents enable row level security;
 alter table public.document_chunks enable row level security;
 alter table public.chat_conversations enable row level security;
 alter table public.chat_messages enable row level security;
-alter table public.chat_feedback enable row level security;
 
 -- RLS Policies for documents
 create policy "Allow users to view their own documents or global ones"

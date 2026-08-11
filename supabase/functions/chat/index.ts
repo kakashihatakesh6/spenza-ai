@@ -40,8 +40,8 @@ serve(async (req) => {
 
     // 2. Parse request payload
     const { conversationId, message } = await req.json();
-    if (!conversationId || !message) {
-      return new Response(JSON.stringify({ error: 'Missing conversationId or message.' }), {
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return new Response(JSON.stringify({ error: 'Missing or empty message payload.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -57,28 +57,67 @@ serve(async (req) => {
 
     const supabaseAdmin = getServiceClient();
 
+    // 3. Resolve & Verify conversation ownership
+    let conversation: any = null;
+    let targetConversationId = conversationId;
+
+    if (targetConversationId && typeof targetConversationId === 'string' && targetConversationId.trim().length > 0) {
+      const { data: existingConv } = await supabaseAdmin
+        .from('chat_conversations')
+        .select('*')
+        .eq('id', targetConversationId)
+        .maybeSingle();
+
+      if (existingConv) {
+        if (existingConv.user_id !== user.id) {
+          return new Response(JSON.stringify({ error: 'Conversation not found or unauthorized.' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        conversation = existingConv;
+      }
+    }
+
+    // If conversation not provided or not found, check if user has an existing active conversation or auto-create a new one
+    if (!conversation) {
+      const { data: latestUserConv } = await supabaseAdmin
+        .from('chat_conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestUserConv && (!targetConversationId || targetConversationId.trim().length === 0)) {
+        conversation = latestUserConv;
+        targetConversationId = latestUserConv.id;
+      } else {
+        const { data: newConv, error: createError } = await supabaseAdmin
+          .from('chat_conversations')
+          .insert({ user_id: user.id, title: 'Spendly AI Assistant' })
+          .select('*')
+          .single();
+
+        if (createError || !newConv) {
+          Logger.error('Failed to create new conversation for user', createError);
+          return new Response(JSON.stringify({ error: 'Failed to create conversation for user.' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        conversation = newConv;
+        targetConversationId = newConv.id;
+      }
+    }
+
     // Initialize Telemetry Metrics
     const metrics: AgentMetrics = {
       userId: user.id,
-      conversationId: conversationId,
+      conversationId: targetConversationId,
       startTimeMs,
       toolsCalled: []
     };
-
-    // 3. Verify conversation ownership
-    const { data: conversation, error: convError } = await supabaseAdmin
-      .from('chat_conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (convError || !conversation) {
-      return new Response(JSON.stringify({ error: 'Conversation not found or unauthorized.' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     // 4. Run Automatic Ingestion Pipeline
     await ensureIngested(supabaseAdmin, geminiApiKey);
@@ -141,7 +180,7 @@ serve(async (req) => {
     const { data: historyMessages, error: historyError } = await supabaseAdmin
       .from('chat_messages')
       .select('role, content')
-      .eq('conversation_id', conversationId)
+      .eq('conversation_id', targetConversationId)
       .order('created_at', { ascending: true })
       .limit(8);
 
@@ -335,7 +374,7 @@ MANDATORY RULES:
 
           // Save User Message
           await supabaseAdmin.from('chat_messages').insert({
-            conversation_id: conversationId,
+            conversation_id: targetConversationId,
             role: 'user',
             content: message,
           });
@@ -344,7 +383,7 @@ MANDATORY RULES:
           const { data: assistantMsg, error: asstMsgErr } = await supabaseAdmin
             .from('chat_messages')
             .insert({
-              conversation_id: conversationId,
+              conversation_id: targetConversationId,
               role: 'assistant',
               content: fullResponseText,
               citations: collectedCitations,
@@ -359,7 +398,7 @@ MANDATORY RULES:
           await supabaseAdmin
             .from('chat_conversations')
             .update({ updated_at: new Date().toISOString() })
-            .eq('id', conversationId);
+            .eq('id', targetConversationId);
 
           // Summarize conversation history if > 8 messages
           if ((historyMessages?.length || 0) >= 8) {
@@ -377,7 +416,7 @@ MANDATORY RULES:
                 await supabaseAdmin
                   .from('chat_conversations')
                   .update({ summary: summaryRes.content })
-                  .eq('id', conversationId);
+                  .eq('id', targetConversationId);
               }
             } catch (err) {
               Logger.warn('[ChatAgent] Background summarization failed', err);
@@ -389,6 +428,7 @@ MANDATORY RULES:
             textEncoder.encode(
               `event: done\ndata: ${JSON.stringify({
                 message_id: assistantMsg.id,
+                conversation_id: targetConversationId,
                 token_usage: tokenUsage,
               })}\n\n`
             )
