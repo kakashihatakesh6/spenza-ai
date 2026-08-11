@@ -127,14 +127,15 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       read: false,
     };
 
+    let didAdd = false;
     set((state) => {
       const isDuplicate = state.notifications.some(
-        (n) => n.title === newNotification.title && n.message === newNotification.message
+        (n) => n.title.trim() === newNotification.title.trim() && n.message.trim() === newNotification.message.trim()
       );
       if (isDuplicate) {
         return state;
       }
-
+      didAdd = true;
       const updated = [newNotification, ...state.notifications];
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch((e) =>
         logger.warn('Failed to save notification to AsyncStorage', e)
@@ -142,14 +143,22 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       return { notifications: updated };
     });
 
-    // Save notification to Supabase DB in background
-    try {
-      const { useAuthStore } = require('./authStore');
-      const userId = useAuthStore.getState().user?.id;
-      if (userId) {
-        notificationDbService.saveNotificationToDb(newNotification, userId);
-      }
-    } catch {}
+    if (didAdd) {
+      // Trigger native OS push notification banner EXACTLY ONCE
+      notificationService.sendImmediateNotification(newNotification.title, newNotification.message, {
+        type: newNotification.type,
+        categoryName: newNotification.categoryName,
+      }).catch((e) => logger.warn('Failed to trigger push notification banner', e));
+
+      // Save notification to Supabase DB in background
+      try {
+        const { useAuthStore } = require('./authStore');
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) {
+          notificationDbService.saveNotificationToDb(newNotification, userId);
+        }
+      } catch {}
+    }
   },
 
   markAllAsRead: () => {

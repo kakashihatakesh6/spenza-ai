@@ -138,43 +138,9 @@ function RootLayoutNav() {
       };
     }
 
-    // 5. Foreground Notification Listener
-    const foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
-      const { title, body, data } = notification.request.content;
-      if (!title?.trim() && !body?.trim()) return; // Ignore blank system push events
-
-      const type = (data?.type as any) || 'info';
-      const categoryName = (data?.categoryName as string) || 'ALERT';
-
-      useNotificationStore.getState().addNotification({
-        title: title || 'Notification',
-        message: body || '',
-        type,
-        categoryName,
-      });
-    });
-
-    // 6. Background/Response Notification Listener (when tapped)
-    const backgroundSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const { title, body, data } = response.notification.request.content;
-      if (!title?.trim() && !body?.trim()) return; // Ignore blank system push events
-
-      const type = (data?.type as any) || 'info';
-      const categoryName = (data?.categoryName as string) || 'ALERT';
-
-      useNotificationStore.getState().addNotification({
-        title: title || 'Notification',
-        message: body || '',
-        type,
-        categoryName,
-      });
-    });
-
     return () => {
       appStateSubscription.remove();
       unsubscribeNetwork();
-      foregroundSubscription.remove();
-      backgroundSubscription.remove();
     };
   }, []);
 

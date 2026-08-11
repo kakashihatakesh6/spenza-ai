@@ -267,6 +267,12 @@ export default function SecurityScreen() {
               } else {
                 const updated = await authService.getActiveSessions();
                 setSessions(updated);
+                useNotificationStore.getState().addNotification({
+                  title: 'Security Alert: Device Terminated',
+                  message: `Terminated session for ${session.device} from Security Center.`,
+                  type: 'security',
+                  categoryName: 'SECURITY',
+                });
                 useAlertStore.getState().showAlert('Success', `Terminated session on ${session.device}.`, 'success');
               }
             } catch (err: any) {

@@ -48,8 +48,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           logger.info('Session restored');
         } else if (event === 'SIGNED_IN') {
           hasHandledRevocation = false;
+          knownDeviceIds = null;
           logger.info('Session restored / signed in');
         } else if (event === 'SIGNED_OUT') {
+          hasHandledRevocation = false;
+          knownDeviceIds = null;
           logger.info('User signed out');
           try {
             // Lazy import to prevent circular dependency
