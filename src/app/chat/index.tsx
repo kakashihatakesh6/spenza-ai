@@ -294,6 +294,7 @@ export default function ChatDashboardScreen() {
         setKeyboardHeight(0);
       } else if (nextAppState === 'active') {
         textInputRef.current?.blur();
+        Keyboard.dismiss();
         setKeyboardHeight(0);
       }
     });
@@ -722,7 +723,7 @@ export default function ChatDashboardScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 65 + insets.top : 0}
           style={{ flex: 1 }}
         >
@@ -851,6 +852,9 @@ export default function ChatDashboardScreen() {
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: true });
                   }, 250);
+                }}
+                onBlur={() => {
+                  setKeyboardHeight(0);
                 }}
                 editable={isOnline && !sending && !isStreaming}
                 multiline
