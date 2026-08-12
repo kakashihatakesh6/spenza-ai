@@ -6,6 +6,7 @@ import { useNotificationStore } from './notificationStore';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { logger } from '../services/logger';
+import { networkMonitor } from '../services/logger/networkMonitor';
 
 interface AuthState {
   user: User | null;
@@ -80,6 +81,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (event === 'USER_UPDATED' && state.session?.access_token === session?.access_token && state.user?.id === session?.user?.id) {
             return { user: session?.user || state.user };
           }
+
+          // Preserve local session state when offline if Supabase SDK emits null session due to failed token refresh
+          if (!session && !networkMonitor.isOnline && state.user) {
+            return state;
+          }
+
           return { 
             session, 
             user: session?.user || null, 
@@ -113,9 +120,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = get().user;
       if (!currentSession && !currentUser) return false;
 
+      // Skip remote validation if device is currently offline
+      if (!networkMonitor.isOnline) {
+        return true;
+      }
+
       // 1. Check with Supabase Auth server if refresh token or session is still valid
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
+        const errMsg = (error?.message || '').toLowerCase();
+        const errName = (error?.name || '').toLowerCase();
+        const isNetworkError =
+          !networkMonitor.isOnline ||
+          errMsg.includes('network') ||
+          errMsg.includes('failed to fetch') ||
+          errMsg.includes('offline') ||
+          errMsg.includes('timeout') ||
+          errName.includes('typeerror');
+
+        if (isNetworkError) {
+          logger.info('Network error during session validation. Preserving offline session.');
+          return true;
+        }
+
         logger.info('Session invalidated or user signed out remotely');
         set({ user: null, session: null });
         useAlertStore.getState().showAlert(
