@@ -1,83 +1,205 @@
-import { ChatMessage } from '../services/chatService';
+import { logger } from '../services/logger';
+
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const GROQ_API_KEY =
+  process.env.EXPO_PUBLIC_GROQ_API_KEY ||
+  process.env.GROQ_API_KEY
+
+// In-memory cache for prompt suggestions by conversation context
+const suggestionCache: Record<string, string[]> = {};
 
 /**
- * Generates dynamic, context-aware follow-up question suggestions
- * based on the user's question and the LLM assistant's answer.
+ * Dynamically generates follow-up question suggestions using LLM:
+ * 1. Groq API (Primary LLM)
+ * 2. Gemini API (Secondary LLM Fallback)
+ * 3. Dynamic Context Extractor (Offline Fallback)
+ * based directly on the user's latest query and the assistant's latest response.
+ */
+export async function fetchLLMGeneratedSuggestions(
+  userQuery?: string,
+  lastAssistantMsg?: string
+): Promise<string[]> {
+  if (!userQuery || !lastAssistantMsg) {
+    return [
+      "📊 What is my total expense summary this month?",
+      "💡 Give me 3 tips to reduce my spending",
+      "📤 How do I export my transaction history?",
+    ];
+  }
+
+  const cacheKey = `${userQuery.slice(0, 100)}::${lastAssistantMsg.slice(0, 100)}`;
+  if (suggestionCache[cacheKey]) {
+    return suggestionCache[cacheKey];
+  }
+
+  // 1. Primary LLM: Groq API (llama-3.3-70b-versatile)
+  if (GROQ_API_KEY) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a financial chat assistant. Based on the user query and assistant response, return ONLY a JSON array of 3 short follow-up questions that the user might ask next. Example format: ["Question 1?", "Question 2?", "Question 3?"]. Do NOT output code blocks or additional prose.',
+            },
+            {
+              role: 'user',
+              content: `User query: "${userQuery}"\nAssistant response: "${lastAssistantMsg}"`,
+            },
+          ],
+          temperature: 0.6,
+          max_tokens: 150,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data?.choices?.[0]?.message?.content || '';
+        const cleanJson = rawText.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed
+            .map((s: string) => String(s).replace(/^[\u1F300-\u1F9FF\u2600-\u26FF\u2700-\u27BF\s]+/, '').trim())
+            .filter(Boolean)
+            .slice(0, 3);
+
+          if (cleaned.length > 0) {
+            suggestionCache[cacheKey] = cleaned;
+            return cleaned;
+          }
+        }
+      } else {
+        const errText = await response.text().catch(() => '');
+        logger.warn('Groq API suggestion error:', response.status, errText);
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch LLM suggestions from Groq API, falling back to Gemini API:', err);
+    }
+  }
+
+  // 2. Secondary LLM Fallback: Gemini API (gemini-1.5-flash)
+  if (GEMINI_API_KEY) {
+    try {
+      const prompt = `You are a helpful personal finance AI assistant.
+Based on this recent user-assistant interaction:
+User Question: "${userQuery.slice(0, 300)}"
+Assistant Answer: "${lastAssistantMsg.slice(0, 500)}"
+
+Generate exactly 3 short, relevant, and natural follow-up questions or next actions the user might want to ask next based strictly on the response above.
+Return ONLY a raw JSON array of 3 strings, e.g. ["Can you break this down further?", "What about next month?", "Show top 3 spending items"]. Do NOT add code block markdown tags or extra text.`;
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 150,
+            },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleanJson = rawText.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed
+            .map((s: string) => String(s).replace(/^[\u1F300-\u1F9FF\u2600-\u26FF\u2700-\u27BF\s]+/, '').trim())
+            .filter(Boolean)
+            .slice(0, 3);
+
+          if (cleaned.length > 0) {
+            suggestionCache[cacheKey] = cleaned;
+            return cleaned;
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch LLM suggestions from Gemini API, falling back to dynamic context extractor:', err);
+    }
+  }
+
+  // 3. Third Fallback: Contextual Dynamic Extractor (offline mode)
+  return extractDynamicSuggestionsFromContext(userQuery, lastAssistantMsg);
+}
+
+/**
+ * Parses keywords and subjects directly out of lastAssistantMsg & userQuery to generate follow-up prompts dynamically.
+ */
+export function extractDynamicSuggestionsFromContext(
+  userQuery: string = '',
+  lastAssistantMsg: string = ''
+): string[] {
+  const text = `${lastAssistantMsg} ${userQuery}`.trim();
+  if (!text) {
+    return [
+      "📊 What is my total expense summary this month?",
+      "💡 Give me 3 tips to reduce my spending",
+      "📤 How do I export my transaction history?",
+    ];
+  }
+
+  const stopWords = new Set([
+    'this', 'that', 'with', 'from', 'your', 'have', 'been', 'were', 'about', 'there',
+    'which', 'would', 'could', 'should', 'these', 'those', 'where', 'other', 'total',
+    'amount', 'based', 'using', 'first', 'after', 'before', 'above', 'below', 'under'
+  ]);
+
+  // Extract key terms (words longer than 3 characters, excluding stop words)
+  const cleanMsg = text.replace(/[^a-zA-Z0-9\s]/g, ' ');
+  const words = cleanMsg.split(/\s+/).filter((w) => w.length > 3 && !stopWords.has(w.toLowerCase()));
+
+  // Get top 3 unique terms from the assistant's response
+  const topics = Array.from(
+    new Set(words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+  ).slice(0, 3);
+
+  const suggestions: string[] = [];
+
+  if (topics[0]) {
+    suggestions.push(`💡 Tell me more details about ${topics[0]}`);
+  }
+  if (topics[1]) {
+    suggestions.push(`📊 How does ${topics[1]} impact my monthly budget?`);
+  }
+  if (topics[2]) {
+    suggestions.push(`📈 What are key insights regarding ${topics[2]}?`);
+  } else if (topics[0]) {
+    suggestions.push(`💡 What are actionable next steps for ${topics[0]}?`);
+  }
+
+  if (suggestions.length < 3) {
+    suggestions.push("💡 Can you elaborate further on this response?");
+    suggestions.push("📊 What else should I know about this topic?");
+  }
+
+  return suggestions.slice(0, 3);
+}
+
+/**
+ * Synchronous wrapper for backwards compatibility
  */
 export function generateLLMSuggestions(
   userQuery?: string,
   lastAssistantMsg?: string,
   messagesCount: number = 0
 ): string[] {
-  if (!userQuery && (!lastAssistantMsg || messagesCount === 0)) {
-    return [
-      "📊 What is my total expense summary this month?",
-      "💡 Give me 3 tips to reduce my spending",
-      "📤 How do I export my transaction history?",
-      "📷 How to scan receipts with Gemini OCR?",
-    ];
+  const cacheKey = `${(userQuery || '').slice(0, 100)}::${(lastAssistantMsg || '').slice(0, 100)}`;
+  if (suggestionCache[cacheKey]) {
+    return suggestionCache[cacheKey];
   }
-
-  const query = (userQuery || '').toLowerCase();
-  const answer = (lastAssistantMsg || '').toLowerCase();
-  const combined = `${query} ${answer}`;
-
-  const suggestions: string[] = [];
-
-  // Spending / Expense Summary / Categories
-  if (combined.includes('spend') || combined.includes('expense') || combined.includes('total') || combined.includes('summary') || combined.includes('bought')) {
-    suggestions.push("📊 Break this down by top categories");
-    suggestions.push("📈 Compare this with last month's spend");
-    suggestions.push("💡 Which category cost me the most?");
-  }
-
-  // Currency / Exchange rates / GBP / EUR / USD / INR
-  if (combined.includes('gbp') || combined.includes('usd') || combined.includes('eur') || combined.includes('currency') || combined.includes('convert') || combined.includes('inr') || combined.includes('₹') || combined.includes('$') || combined.includes('£')) {
-    suggestions.push("💱 Convert my total balance to EUR (€)");
-    suggestions.push("💵 Show my top 5 transactions in USD ($)");
-    suggestions.push("📊 Export multi-currency breakdown to CSV");
-  }
-
-  // Income / Budget / Salary
-  if (combined.includes('income') || combined.includes('budget') || combined.includes('salary') || combined.includes('save') || combined.includes('savings')) {
-    suggestions.push("🎯 Help me set up a 50/30/20 budget");
-    suggestions.push("💡 How much can I save if I cut dining by 20%?");
-    suggestions.push("⚖️ What is my net income to expense ratio?");
-  }
-
-  // Export / CSV / Report / Excel
-  if (combined.includes('export') || combined.includes('csv') || combined.includes('excel') || combined.includes('download') || combined.includes('report')) {
-    suggestions.push("📁 Save as detailed CSV file now");
-    suggestions.push("📅 Filter export for current month only");
-    suggestions.push("📊 Send expense summary to my email");
-  }
-
-  // Scanning / Receipt / OCR / UPI / Screenshots
-  if (combined.includes('scan') || combined.includes('receipt') || combined.includes('upi') || combined.includes('screenshot') || combined.includes('paytm') || combined.includes('gpay')) {
-    suggestions.push("📷 Take a photo of a paper receipt now");
-    suggestions.push("🖼️ Upload payment screenshot from gallery");
-    suggestions.push("❓ How does Gemini auto-match vendors?");
-  }
-
-  // Specific vendor / food / dining / shopping / travel
-  if (combined.includes('food') || combined.includes('dining') || combined.includes('coffee') || combined.includes('swiggy') || combined.includes('zomato') || combined.includes('amazon') || combined.includes('uber')) {
-    suggestions.push("🍔 How much did I spend on dining out this week?");
-    suggestions.push("☕ Show all coffee & beverage purchases");
-    suggestions.push("💡 Give me a strategy to cut food delivery costs");
-  }
-
-  // Generic intelligent follow-ups if less than 3 matching rule suggestions
-  if (suggestions.length < 3) {
-    // Extract key nouns/words from user query to make hyper-personalized prompt
-    const words = query.replace(/[^\w\s]/gi, '').split(/\s+/).filter(w => w.length > 3);
-    const mainTopic = words[0] || 'spending';
-
-    suggestions.push(`🔍 Tell me more about my ${mainTopic} trends`);
-    suggestions.push(`💡 What are action steps to optimize my ${mainTopic}?`);
-    suggestions.push("📊 Show a detailed transaction list");
-    suggestions.push("📥 How do I back up all my data?");
-  }
-
-  // Deduplicate and return top 4 distinct suggestions
-  return Array.from(new Set(suggestions)).slice(0, 4);
+  return extractDynamicSuggestionsFromContext(userQuery, lastAssistantMsg);
 }

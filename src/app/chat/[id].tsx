@@ -20,7 +20,7 @@ import { ChatMessage } from '../../services/chatService';
 import { exportService } from '../../services/exportService';
 import { useAlertStore } from '../../store/alertStore';
 import { useChatStore } from '../../store/chatStore';
-import { generateLLMSuggestions } from '../../utils/chatSuggestions';
+import { fetchLLMGeneratedSuggestions, generateLLMSuggestions } from '../../utils/chatSuggestions';
 
 // Chat UI Components
 import { ChatHeader } from '../../components/chat/ChatHeader';
@@ -58,11 +58,36 @@ export default function ChatSessionScreen() {
   const [sending, setSending] = useState(false);
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
 
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<any>(null);
   const userScrolledUpRef = useRef<boolean>(false);
+
+  // Fetch real LLM follow-up suggestions generated directly from last query & assistant response
+  useEffect(() => {
+    let isMounted = true;
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content;
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant')?.content;
+
+    if (lastUserMessage && lastAssistantMessage && !isStreaming) {
+      fetchLLMGeneratedSuggestions(lastUserMessage, lastAssistantMessage).then((suggestions) => {
+        if (isMounted && suggestions && suggestions.length > 0) {
+          setDynamicSuggestions(suggestions);
+        }
+      });
+    } else if (messages.length === 0) {
+      setDynamicSuggestions([
+        "📊 What is my total expense summary this month?",
+        "💡 Give me 3 tips to reduce my spending",
+        "📤 How do I export my transaction history?",
+      ]);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [messages, isStreaming]);
 
   // Load target conversation session on mount
   useEffect(() => {
@@ -205,16 +230,6 @@ export default function ChatSessionScreen() {
       useAlertStore.getState().showAlert('Export Failed', err?.message || 'Could not export chat.', 'error');
     }
   };
-
-  // Compute dynamic LLM context suggestions based on question & LLM response
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content;
-  const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant')?.content;
-
-  const dynamicSuggestions = generateLLMSuggestions(
-    lastUserMessage,
-    lastAssistantMessage,
-    messages.length
-  );
 
   const streamingMsgObj: ChatMessage | null = isStreaming
     ? {
