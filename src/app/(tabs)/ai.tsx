@@ -148,15 +148,15 @@ export default function AiHubScreen() {
             style={[
               styles.actionCard,
               {
-                backgroundColor: isDark ? '#151D30' : '#FFFFFF',
-                borderColor: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.08)',
+                backgroundColor: isDark ? '#131B2E' : '#FFFFFF',
+                borderColor: isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(139, 92, 246, 0.15)',
                 shadowColor: colors.accent,
               },
             ]}
             onPress={() => router.push('/chat' as any)}
             activeOpacity={0.85}
           >
-            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(139, 92, 246, 0.08)' }]}>
+            <View style={[styles.actionIconBg, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
               <MessageSquare size={26} color={colors.accent} />
             </View>
             <View style={styles.actionContent}>
@@ -164,14 +164,14 @@ export default function AiHubScreen() {
                 <Text style={[styles.actionTitle, { color: colors.text }]}>
                   AI Chat Assistant
                 </Text>
-                <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.08)' }]}>
+                <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(139, 92, 246, 0.1)' }]}>
                   <Text style={[styles.badgeText, { color: colors.accent }]}>
-                    RAG CORES
+                    NEW CHAT UI
                   </Text>
                 </View>
               </View>
               <Text style={[styles.actionDesc, { color: colors.textSecondary }]}>
-                Ask questions about the official Spendly App Knowledge Base and Q&A guide in real-time.
+                Chat with Spendly AI for instant spending analytics, budget guidance, CSV exports & RAG knowledge base answers.
               </Text>
             </View>
           </TouchableOpacity>
