@@ -259,12 +259,27 @@ export default function SecurityScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              setIsLoadingSessions(true);
-              await authService.terminateSession(session.id);
               if (session.isCurrent) {
-                useAlertStore.getState().showAlert('Signed Out', 'You have been signed out of this device.', 'info');
-                router.replace('/auth/login');
+                useAlertStore.getState().showAlert(
+                  'Session Terminated',
+                  'This device was signed out from Active Login Devices in Security Center.',
+                  'warning',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: async () => {
+                        try {
+                          await authService.terminateSession(session.id);
+                        } catch {}
+                        router.replace('/auth/login');
+                      }
+                    }
+                  ],
+                  false
+                );
               } else {
+                setIsLoadingSessions(true);
+                await authService.terminateSession(session.id);
                 const updated = await authService.getActiveSessions();
                 setSessions(updated);
                 useNotificationStore.getState().addNotification({

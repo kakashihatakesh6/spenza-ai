@@ -54,6 +54,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isSigningOut = false;
           logger.info('Session restored / signed in');
         } else if (event === 'SIGNED_OUT') {
+          const wasLoggedIn = !!get().user;
+          const remoteRevoked = wasLoggedIn && !isSigningOut;
+
           hasHandledRevocation = false;
           knownDeviceIds = null;
           isSigningOut = false;
@@ -64,6 +67,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             useChatStore.getState().resetChatStore();
           } catch (err) {
             logger.warn('Failed to reset chat store on sign out', err);
+          }
+
+          if (remoteRevoked) {
+            if (hasHandledRevocation) {
+              useAlertStore.getState().showAlert(
+                'Session Terminated',
+                'This device was signed out from Active Login Devices in Security Center.',
+                'warning',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      const { router } = require('expo-router');
+                      router.replace('/auth/login');
+                    }
+                  }
+                ],
+                false
+              );
+            } else {
+              useAlertStore.getState().showAlert(
+                'Session Expired',
+                'Your active session has ended or was revoked from another device. Please log in again.',
+                'warning',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      const { router } = require('expo-router');
+                      router.replace('/auth/login');
+                    }
+                  }
+                ],
+                false
+              );
+            }
           }
         } else if (event === 'TOKEN_REFRESHED' && !session) {
           logger.info('Session expired');
@@ -153,11 +192,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         logger.info('Session invalidated or user signed out remotely');
-        set({ user: null, session: null });
         useAlertStore.getState().showAlert(
           'Session Expired',
           'Your active session has ended or was revoked from another device. Please log in again.',
-          'warning'
+          'warning',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                isSigningOut = true;
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+                set({ user: null, session: null });
+                const { router } = require('expo-router');
+                router.replace('/auth/login');
+              }
+            }
+          ],
+          false
         );
         return false;
       }
@@ -173,8 +224,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (!hasHandledRevocation) {
             hasHandledRevocation = true;
             logger.info('Device session terminated remotely from active_devices');
-            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-            set({ user: null, session: null });
             useNotificationStore.getState().addNotification({
               title: 'Security Alert: Device Terminated',
               message: 'This device was signed out from Active Login Devices in Security Center.',
@@ -184,7 +233,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             useAlertStore.getState().showAlert(
               'Session Terminated',
               'This device was signed out from Active Login Devices in Security Center.',
-              'warning'
+              'warning',
+              [
+                {
+                  text: 'OK',
+                  onPress: async () => {
+                    isSigningOut = true;
+                    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+                    set({ user: null, session: null });
+                    const { router } = require('expo-router');
+                    router.replace('/auth/login');
+                  }
+                }
+              ],
+              false
             );
           }
           return false;
