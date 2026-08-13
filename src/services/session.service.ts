@@ -299,7 +299,8 @@ export const sessionService = {
     const deviceId = await this.getDeviceId();
     if (sessionId === deviceId) {
       // Current session - sign out locally
-      await supabase.auth.signOut({ scope: 'local' });
+      const { useAuthStore } = require('../store/authStore');
+      await useAuthStore.getState().signOut();
       return;
     }
 

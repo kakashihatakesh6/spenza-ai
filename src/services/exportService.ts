@@ -155,6 +155,27 @@ export const exportService = {
     }
   },
 
+  /**
+   * Saves text content to a local file and triggers native share dialog.
+   */
+  async saveTextFile(textContent: string, customFileName?: string): Promise<string> {
+    let cleanName = (customFileName || '').trim();
+    if (!cleanName) {
+      cleanName = `chat_export_${new Date().toISOString().split('T')[0]}.txt`;
+    }
+    const filePath = `${documentDirectory}${cleanName}`;
+    await writeAsStringAsync(filePath, textContent, {
+      encoding: EncodingType.UTF8,
+    });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(filePath, {
+        mimeType: 'text/plain',
+        dialogTitle: 'Export Chat Text',
+      });
+    }
+    return filePath;
+  },
+
   _escapeCSVField(field: string): string {
     if (field.includes(',') || field.includes('"') || field.includes('\n')) {
       return `"${field.replace(/"/g, '""')}"`;

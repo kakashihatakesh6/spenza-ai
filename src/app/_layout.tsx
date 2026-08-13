@@ -6,6 +6,7 @@ import { initDatabase } from '../database/database';
 import { useSettingsStore } from '../store/settingsStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useAuthStore } from '../store/authStore';
+import { useAlertStore } from '../store/alertStore';
 import { useTheme } from '../hooks/useTheme';
 import { useCurrencyStore } from '../store/currencyStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -40,6 +41,10 @@ function RootLayoutNav() {
   const user = useAuthStore((state) => state.user);
   const authLoading = useAuthStore((state) => state.isLoading);
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
+
+  const alertVisible = useAlertStore((state) => state.visible);
+  const alertTitle = useAlertStore((state) => state.title);
+  const isCriticalAuthAlert = alertVisible && (alertTitle === 'Session Expired' || alertTitle === 'Session Terminated');
 
   const segments = useSegments();
   const router = useRouter();
@@ -151,16 +156,6 @@ function RootLayoutNav() {
     }
   }, [authLoading, appReadyLogged]);
 
-  // Periodic heartbeat session check while logged in
-  useEffect(() => {
-    if (!user) return;
-    // Validate session every 30 seconds to detect remote revocation
-    const interval = setInterval(() => {
-      useAuthStore.getState().validateSession();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
-
   // Route change logger
   useEffect(() => {
     const segs = segments as string[];
@@ -186,7 +181,7 @@ function RootLayoutNav() {
     const segs = segments as string[];
     const inAuthGroup = segs[0] === 'auth';
 
-    if (!user && !inAuthGroup) {
+    if (!user && !inAuthGroup && !isCriticalAuthAlert) {
       // Redirect to login if not authenticated and not in auth screens
       router.replace('/auth/login');
     } else if (user && inAuthGroup) {
@@ -196,7 +191,7 @@ function RootLayoutNav() {
         router.replace('/(tabs)');
       }
     }
-  }, [user, authLoading, segments]);
+  }, [user, authLoading, segments, isCriticalAuthAlert]);
 
   return (
     <>

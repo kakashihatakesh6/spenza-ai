@@ -15,7 +15,7 @@ import { useAlertStore } from '../store/alertStore';
 
 export const CustomAlertModal: React.FC = () => {
   const { colors, isDark } = useTheme();
-  const { visible, title, message, type, buttons, hideAlert } = useAlertStore();
+  const { visible, title, message, type, buttons, hideAlert, dismissible = true } = useAlertStore();
 
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -132,10 +132,10 @@ export const CustomAlertModal: React.FC = () => {
       visible={visible}
       transparent={true}
       animationType="none"
-      onRequestClose={hideAlert}
+      onRequestClose={dismissible ? hideAlert : () => {}}
     >
       <Animated.View style={[styles.overlay, { opacity: opacityAnim }]}>
-        <Pressable style={styles.backdrop} onPress={hideAlert} />
+        <Pressable style={styles.backdrop} onPress={dismissible ? hideAlert : undefined} />
         
         <Animated.View
           style={[

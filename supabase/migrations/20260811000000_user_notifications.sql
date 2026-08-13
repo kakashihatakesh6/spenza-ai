@@ -1,7 +1,4 @@
--- 1. Drop chat_feedback table
-drop table if exists public.chat_feedback cascade;
-
--- 2. Create user_notifications table
+-- 1. Create user_notifications table
 create table if not exists public.user_notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,

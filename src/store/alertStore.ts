@@ -14,12 +14,14 @@ interface AlertState {
   message: string;
   type: AlertType;
   buttons: AlertButton[];
+  dismissible?: boolean;
   
   showAlert: (
     title: string,
     message: string,
     type?: AlertType,
-    buttons?: AlertButton[]
+    buttons?: AlertButton[],
+    dismissible?: boolean
   ) => void;
   hideAlert: () => void;
 }
@@ -30,8 +32,9 @@ export const useAlertStore = create<AlertState>((set) => ({
   message: '',
   type: 'info',
   buttons: [],
+  dismissible: true,
 
-  showAlert: (title, message, type = 'info', buttons = []) => {
+  showAlert: (title, message, type = 'info', buttons = [], dismissible = true) => {
     if (!title?.trim() && !message?.trim()) {
       return;
     }
@@ -41,6 +44,7 @@ export const useAlertStore = create<AlertState>((set) => ({
       message,
       type,
       buttons,
+      dismissible,
     });
   },
 
