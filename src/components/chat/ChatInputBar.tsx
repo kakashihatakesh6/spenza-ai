@@ -16,7 +16,7 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Send, Square, Sparkles, X } from 'lucide-react-native';
+import { Send, Square, Sparkles } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 
 interface ChatInputBarProps {
@@ -98,14 +98,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     return sendScale.value;
   };
 
-  const handleClearText = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // fallback
-    }
-    onChangeText('');
-  };
+
 
   // Reanimated dynamic styles
   const inputContainerAnimatedStyle = useAnimatedStyle(() => {
@@ -186,17 +179,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           editable={!disabled && !isStreaming}
         />
 
-        {/* Clear input text shortcut button */}
-        {value.length > 0 && !isStreaming && (
-          <TouchableOpacity
-            style={styles.clearBtn}
-            onPress={handleClearText}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <X size={15} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
+
 
         {/* Animated Send / Stop Button */}
         {isStreaming ? (
@@ -284,10 +267,7 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     textAlignVertical: 'center',
   },
-  clearBtn: {
-    padding: 6,
-    marginRight: 4,
-  },
+
   actionBtn: {
     width: 36,
     height: 36,
