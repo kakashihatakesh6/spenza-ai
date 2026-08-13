@@ -151,16 +151,6 @@ function RootLayoutNav() {
     }
   }, [authLoading, appReadyLogged]);
 
-  // Periodic heartbeat session check while logged in
-  useEffect(() => {
-    if (!user) return;
-    // Validate session every 30 seconds to detect remote revocation
-    const interval = setInterval(() => {
-      useAuthStore.getState().validateSession();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
-
   // Route change logger
   useEffect(() => {
     const segs = segments as string[];

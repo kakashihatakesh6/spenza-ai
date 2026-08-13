@@ -23,6 +23,7 @@ interface AuthState {
 
 let hasHandledRevocation = false;
 let knownDeviceIds: string[] | null = null;
+let isSigningOut = false;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -50,10 +51,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } else if (event === 'SIGNED_IN') {
           hasHandledRevocation = false;
           knownDeviceIds = null;
+          isSigningOut = false;
           logger.info('Session restored / signed in');
         } else if (event === 'SIGNED_OUT') {
           hasHandledRevocation = false;
           knownDeviceIds = null;
+          isSigningOut = false;
           logger.info('User signed out');
           try {
             // Lazy import to prevent circular dependency
@@ -116,6 +119,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   validateSession: async () => {
     try {
+      if (isSigningOut) return false;
       const currentSession = get().session;
       const currentUser = get().user;
       if (!currentSession && !currentUser) return false;
@@ -127,6 +131,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 1. Check with Supabase Auth server if refresh token or session is still valid
       const { data: { user }, error } = await supabase.auth.getUser();
+
+      // Guard against race condition if sign out was initiated while getUser() was in flight or state was cleared
+      if (isSigningOut || !get().user || !get().session) {
+        return false;
+      }
       if (error || !user) {
         const errMsg = (error?.message || '').toLowerCase();
         const errName = (error?.name || '').toLowerCase();
@@ -267,6 +276,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     try {
+      isSigningOut = true;
       set({ isLoading: true });
       await authService.signOut();
       try {
@@ -277,6 +287,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       logger.error('Failed to sign out', error);
       set({ isLoading: false });
+    } finally {
+      isSigningOut = false;
     }
   },
 }));
