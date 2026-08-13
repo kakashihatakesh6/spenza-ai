@@ -393,8 +393,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         await chatService.sendFeedback(messageId, isPositive, feedbackText);
         logger.info(`Store: message feedback logged successfully for message ${messageId}`);
       } catch (err) {
-        logger.error('Store: failed to submit feedback', err);
-        throw err;
+        logger.warn('Store: warning submitting feedback', err);
       }
     },
   };

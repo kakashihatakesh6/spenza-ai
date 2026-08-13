@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import {
   Copy,
   Check,
@@ -74,14 +75,21 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   };
 
   const handleFeedback = (isPositive: boolean) => {
-    const nextState = isPositive ? 'up' : 'down';
-    setFeedbackGiven(nextState);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const targetState = isPositive ? 'up' : 'down';
+    
+    if (feedbackGiven === targetState) {
+      setFeedbackGiven(null);
+      return;
+    }
+
+    setFeedbackGiven(targetState);
     if (onFeedback) {
       onFeedback(message.id, isPositive);
     }
     useAlertStore.getState().showAlert(
       'Feedback Recorded',
-      isPositive ? 'Thank you for rating this response helpful!' : 'Thanks for your feedback. We will refine response quality.',
+      isPositive ? 'Thank you for rating this response helpful! 👍' : 'Thanks for your feedback! We will refine response quality.',
       'info'
     );
   };

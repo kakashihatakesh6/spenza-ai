@@ -125,18 +125,31 @@ export const chatService = {
     isPositive: boolean,
     feedbackText?: string
   ): Promise<void> {
-    const { error } = await supabase
-      .from('chat_feedback')
-      .upsert({
-        message_id: messageId,
-        is_positive: isPositive,
-        feedback_text: feedbackText || null,
-        created_at: new Date().toISOString(),
-      });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const now = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('chat_feedback')
+        .upsert(
+          {
+            message_id: messageId,
+            is_positive: isPositive,
+            feedback_text: feedbackText || null,
+            user_id: user?.id || null,
+            created_at: now,
+            updated_at: now,
+          },
+          { onConflict: 'message_id' }
+        );
 
-    if (error) {
-      logger.error('Failed to submit message feedback', error);
-      throw error;
+      if (error) {
+        logger.error('Failed to submit message feedback to Supabase', error);
+      } else {
+        logger.info(`Message feedback logged successfully for message ${messageId}`);
+      }
+    } catch (err) {
+      logger.warn('Failed to submit message feedback (network/offline)', err);
     }
   },
 
