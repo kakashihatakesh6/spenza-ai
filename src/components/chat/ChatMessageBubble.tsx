@@ -20,11 +20,14 @@ import {
   Sparkles,
   FileText,
   DollarSign,
+  Download,
 } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { BotAvatar } from '../BotAvatar';
 import { ChatMessage, MessageCitation } from '../../services/chatService';
 import { useAlertStore } from '../../store/alertStore';
+import { exportService } from '../../services/exportService';
+import { Expense } from '../../types';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -42,6 +45,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [copied, setCopied] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
   const [showCitations, setShowCitations] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exported, setExported] = useState(false);
 
   // Entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -63,14 +68,68 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     ]).start();
   }, []);
 
+  // Parse CSV data if hidden inside the message content
+  const csvRegex = /<!--CSV_DATA:([\s\S]*?)-->/;
+  const match = message.content.match(csvRegex);
+  let csvData: any[] | null = null;
+  let displayText = message.content;
+
+  if (match) {
+    try {
+      csvData = JSON.parse(match[1]);
+      displayText = message.content.replace(csvRegex, '').trim();
+    } catch (e) {
+      console.warn('Failed to parse CSV_DATA:', e);
+    }
+  }
+
   const handleCopy = async () => {
     try {
-      await Clipboard.setStringAsync(message.content);
+      await Clipboard.setStringAsync(displayText);
       setCopied(true);
       useAlertStore.getState().showAlert('Copied', 'Message content copied to clipboard.', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // ignore
+    }
+  };
+
+  const handleSaveCSV = async () => {
+    if (!csvData || csvData.length === 0) return;
+    setIsExporting(true);
+    try {
+      const parsedExpenses: Expense[] = csvData.map((t: any) => ({
+        id: t.id || `temp_${Math.random().toString(36).substr(2, 9)}`,
+        amount: Number(t.amount) || 0,
+        merchant: t.merchant || 'Unknown',
+        category: t.category || 'Other',
+        date: t.date || new Date().toISOString().split('T')[0],
+        time: t.time || '00:00',
+        paymentMethod: t.paymentMethod || t.payment_method || 'Cash',
+        currency: t.currency || 'INR',
+        tax: t.tax || 0,
+        notes: t.notes || '',
+        createdAt: t.createdAt || t.created_at || new Date().toISOString(),
+        updatedAt: t.updatedAt || t.updated_at || new Date().toISOString(),
+        isSynced: t.isSynced || 0,
+      }));
+
+      const filename = `expenses_chat_export_${new Date().toISOString().split('T')[0]}`;
+      const res = await exportService.saveCSVToCustomLocation(parsedExpenses, filename);
+      if (res.success) {
+        setExported(true);
+        useAlertStore.getState().showAlert(
+          'Export Ready',
+          `CSV report generated successfully!\n\nLocation:\n${res.path || 'Saved to custom location'}`,
+          'success'
+        );
+        setTimeout(() => setExported(false), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      useAlertStore.getState().showAlert('Export Failed', 'An error occurred while preparing the CSV file.', 'error');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -261,8 +320,71 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
           {/* Formatted Text Content */}
           <View style={styles.bodyContent}>
-            {renderFormattedText(message.content)}
+            {renderFormattedText(displayText)}
           </View>
+
+          {/* CSV Export Card */}
+          {csvData && csvData.length > 0 && (
+            <View
+              style={[
+                styles.exportCardContainer,
+                {
+                  backgroundColor: isDark ? 'rgba(30, 41, 59, 0.4)' : 'rgba(248, 250, 252, 0.9)',
+                  borderColor: isDark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(14, 165, 233, 0.15)',
+                },
+              ]}
+            >
+              <View style={styles.exportCardLeft}>
+                <View style={[styles.sheetIconWrapper, { backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(14, 165, 233, 0.1)' }]}>
+                  <FileText size={20} color={isDark ? '#38BDF8' : '#0284C7'} />
+                </View>
+                <View style={styles.exportCardTextCol}>
+                  <Text style={[styles.exportCardTitle, { color: colors.text }]}>
+                    CSV Spreadsheet Ready
+                  </Text>
+                  <Text style={[styles.exportCardSubtitle, { color: colors.textSecondary }]}>
+                    {csvData.length} transaction{csvData.length > 1 ? 's' : ''} compiled
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.exportBtn,
+                  {
+                    backgroundColor: exported 
+                      ? colors.success 
+                      : isDark 
+                        ? 'rgba(56, 189, 248, 0.2)' 
+                        : 'rgba(2, 132, 199, 0.1)',
+                  },
+                ]}
+                onPress={handleSaveCSV}
+                disabled={isExporting}
+                activeOpacity={0.7}
+              >
+                {isExporting ? (
+                  <Text style={[styles.exportBtnText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>
+                    Exporting...
+                  </Text>
+                ) : exported ? (
+                  <>
+                    <Check size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={[styles.exportBtnText, { color: '#FFFFFF', fontWeight: '700' }]}>
+                      Saved
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.exportBtnText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>
+                      Save CSV
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Collapsible Citations Section */}
           {message.citations && message.citations.length > 0 && (
@@ -573,6 +695,51 @@ const styles = StyleSheet.create({
   },
   copyText: {
     fontSize: 11.5,
+    fontWeight: '600',
+  },
+  exportCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  exportCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sheetIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  exportCardTextCol: {
+    flex: 1,
+  },
+  exportCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  exportCardSubtitle: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  exportBtnText: {
+    fontSize: 12,
     fontWeight: '600',
   },
 });
