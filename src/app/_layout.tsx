@@ -66,14 +66,6 @@ function RootLayoutNav() {
     fetchCategories();
     fetchBudgets();
 
-    // Check biometrics lock state on cold start app launch only
-    if (!initialLockSet.current) {
-      initialLockSet.current = true;
-      if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
-        setIsAppLocked(true);
-      }
-    }
-
     // Fetch dynamic exchange rates from API
     useCurrencyStore.getState().fetchRates();
 
@@ -85,6 +77,16 @@ function RootLayoutNav() {
     // 4. Load persisted notification history
     useNotificationStore.getState().loadNotifications();
   }, []);
+
+  // Check biometrics lock state on cold start app launch once authentication is loaded
+  useEffect(() => {
+    if (!authLoading && !initialLockSet.current) {
+      initialLockSet.current = true;
+      if (useSettingsStore.getState().settings.biometricsEnabled && user) {
+        setIsAppLocked(true);
+      }
+    }
+  }, [authLoading, user]);
 
   // Real-time multi-device notifications listener
   useEffect(() => {
@@ -105,13 +107,23 @@ function RootLayoutNav() {
 
   useEffect(() => {
     // AppState listener
+    const prevAppState = { current: AppState.currentState };
+
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         logger.info('App resumed');
         useAuthStore.getState().validateSession();
+
+        // Lock app on resume from background if biometrics are enabled and user is logged in
+        if (prevAppState.current === 'background') {
+          if (useSettingsStore.getState().settings.biometricsEnabled && useAuthStore.getState().user) {
+            setIsAppLocked(true);
+          }
+        }
       } else if (nextAppState === 'background') {
         logger.info('App moved to background');
       }
+      prevAppState.current = nextAppState;
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
