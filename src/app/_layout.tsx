@@ -18,6 +18,7 @@ import { SplashScreen } from '../components/SplashScreen';
 import { BiometricLockScreen } from '../components/BiometricLockScreen';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { CustomAlertModal } from '../components/CustomAlertModal';
+import { AuthTransitionOverlay } from '../components/AuthTransitionOverlay';
 import { logger } from '../services/logger';
 import { networkMonitor } from '../services/logger/networkMonitor';
 
@@ -41,6 +42,8 @@ function RootLayoutNav() {
   const user = useAuthStore((state) => state.user);
   const authLoading = useAuthStore((state) => state.isLoading);
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
+  const isAuthTransitioning = useAuthStore((state) => state.isAuthTransitioning);
+  const authTransitionText = useAuthStore((state) => state.authTransitionText);
 
   const alertVisible = useAlertStore((state) => state.visible);
   const alertTitle = useAlertStore((state) => state.title);
@@ -320,6 +323,8 @@ function RootLayoutNav() {
       )}
 
       <CustomAlertModal />
+
+      <AuthTransitionOverlay visible={isAuthTransitioning} text={authTransitionText} />
     </>
   );
 }

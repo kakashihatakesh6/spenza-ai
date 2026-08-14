@@ -12,12 +12,15 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  isAuthTransitioning: boolean;
+  authTransitionText: string;
   
   initializeAuth: () => Promise<void>;
   refreshUser: () => Promise<void>;
   validateSession: () => Promise<boolean>;
   signOut: () => Promise<void>;
   setSession: (session: Session | null) => void;
+  setAuthTransitioning: (transitioning: boolean, text?: string) => void;
   updateProfile: (username: string, avatarUrl?: string, extraMetadata?: Record<string, any>) => Promise<void>;
 }
 
@@ -29,6 +32,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   session: null,
   isLoading: true,
+  isAuthTransitioning: false,
+  authTransitionText: '',
+  setAuthTransitioning: (transitioning, text = '') => set({ isAuthTransitioning: transitioning, authTransitionText: text }),
 
   initializeAuth: async () => {
     try {
@@ -53,6 +59,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           knownDeviceIds = null;
           isSigningOut = false;
           logger.info('Session restored / signed in');
+          set({ isAuthTransitioning: false });
         } else if (event === 'SIGNED_OUT') {
           const wasLoggedIn = !!get().user;
           const remoteRevoked = wasLoggedIn && !isSigningOut;
@@ -61,6 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           knownDeviceIds = null;
           isSigningOut = false;
           logger.info('User signed out');
+          set({ isAuthTransitioning: false });
           try {
             // Lazy import to prevent circular dependency
             const { useChatStore } = require('./chatStore');
@@ -339,16 +347,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     try {
       isSigningOut = true;
-      set({ isLoading: true });
+      set({ isAuthTransitioning: true, authTransitionText: 'Signing out...' });
       await authService.signOut();
       try {
         const { useChatStore } = require('./chatStore');
         useChatStore.getState().resetChatStore();
       } catch {}
-      set({ session: null, user: null, isLoading: false });
+      set({ session: null, user: null, isAuthTransitioning: false });
     } catch (error) {
       logger.error('Failed to sign out', error);
-      set({ isLoading: false });
+      set({ isAuthTransitioning: false });
     } finally {
       isSigningOut = false;
     }

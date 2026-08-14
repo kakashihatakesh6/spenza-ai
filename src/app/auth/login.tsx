@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
 import { useAlertStore } from '../../store/alertStore';
+import { useAuthStore } from '../../store/authStore';
 import { Card } from '../../components/Card';
 import { authService } from '../../services/auth.service';
 import { Mail, Lock, LogIn, Eye, EyeOff } from 'lucide-react-native';
@@ -56,10 +57,12 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
+      useAuthStore.getState().setAuthTransitioning(true, 'Logging in securely...');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await authService.signIn(email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error: any) {
+      useAuthStore.getState().setAuthTransitioning(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       useAlertStore.getState().showAlert('Authentication Failed', error.message || 'Check your credentials and try again.', 'error');
     } finally {
@@ -70,15 +73,18 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true);
+      useAuthStore.getState().setAuthTransitioning(true, 'Signing in with Google...');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       const session = await authService.signInWithGoogle();
       if (session) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         router.replace('/(tabs)');
       } else {
+        useAuthStore.getState().setAuthTransitioning(false);
         setGoogleLoading(false);
       }
     } catch (error: any) {
+      useAuthStore.getState().setAuthTransitioning(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       useAlertStore.getState().showAlert('Google Sign-In Failed', error.message || 'An error occurred during authentication.', 'error');
       setGoogleLoading(false);
