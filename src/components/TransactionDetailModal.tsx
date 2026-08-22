@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -9,7 +9,14 @@ import {
   ScrollView,
   Dimensions,
   Pressable,
+  Platform,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Expense } from '../types';
 import { useTheme } from '../hooks/useTheme';
@@ -61,6 +68,82 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { settings } = useSettingsStore();
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translationX = useSharedValue(0);
+  const translationY = useSharedValue(0);
+  const savedTranslationX = useSharedValue(0);
+  const savedTranslationY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.max(0.8, savedScale.value * e.scale);
+    })
+    .onEnd(() => {
+      if (scale.value < 1) {
+        scale.value = withTiming(1);
+        savedScale.value = 1;
+        translationX.value = withTiming(0);
+        translationY.value = withTiming(0);
+        savedTranslationX.value = 0;
+        savedTranslationY.value = 0;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (scale.value > 1) {
+        translationX.value = savedTranslationX.value + e.translationX;
+        translationY.value = savedTranslationY.value + e.translationY;
+      }
+    })
+    .onEnd(() => {
+      if (scale.value > 1) {
+        savedTranslationX.value = translationX.value;
+        savedTranslationY.value = translationY.value;
+      }
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onStart(() => {
+      if (scale.value > 1) {
+        scale.value = withTiming(1);
+        savedScale.value = 1;
+        translationX.value = withTiming(0);
+        translationY.value = withTiming(0);
+        savedTranslationX.value = 0;
+        savedTranslationY.value = 0;
+      } else {
+        scale.value = withTiming(2.5);
+        savedScale.value = 2.5;
+      }
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translationX.value },
+      { translateY: translationY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  useEffect(() => {
+    if (!isImageViewerOpen) {
+      scale.value = 1;
+      savedScale.value = 1;
+      translationX.value = 0;
+      translationY.value = 0;
+      savedTranslationX.value = 0;
+      savedTranslationY.value = 0;
+    }
+  }, [isImageViewerOpen]);
 
   useEffect(() => {
     if (transaction) {
@@ -206,13 +289,17 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               </View>
 
               {hasImage ? (
-                <View style={[styles.imageWrapper, { borderColor: colors.border }]}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.imageWrapper, { borderColor: colors.border }]}
+                  onPress={() => setIsImageViewerOpen(true)}
+                >
                   <Image
                     source={imageSource!}
                     style={styles.receiptImage}
                     resizeMode="contain"
                   />
-                </View>
+                </TouchableOpacity>
               ) : (
                 <View
                   style={[
@@ -252,6 +339,53 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           </View>
         </View>
       </View>
+
+      {/* Fullscreen Image Viewer Modal */}
+      {hasImage && (
+        <Modal
+          visible={isImageViewerOpen}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsImageViewerOpen(false)}
+        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <View style={styles.viewerOverlay}>
+              <Pressable style={styles.viewerBackdrop} onPress={() => setIsImageViewerOpen(false)} />
+              
+              {/* Top Header */}
+              <View style={styles.viewerHeader}>
+                <View style={styles.viewerTitleContainer}>
+                  <Text style={styles.viewerTitle} numberOfLines={1}>
+                    {transaction.merchant}
+                  </Text>
+                  <Text style={styles.viewerSubtitle}>
+                    {transaction.date} • {expenseHelpers.getCurrencySymbol(transaction.currency || settings.currency)}
+                    {Number(transaction.amount).toFixed(2)}
+                  </Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.viewerCloseBtn}
+                  onPress={() => setIsImageViewerOpen(false)}
+                >
+                  <X size={22} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Scrollable Zoomable Image Container */}
+              <View style={styles.viewerImageContainer}>
+                <GestureDetector gesture={composedGesture}>
+                  <Animated.Image
+                    source={imageSource!}
+                    style={[styles.viewerImage, animatedStyle]}
+                    resizeMode="contain"
+                  />
+                </GestureDetector>
+              </View>
+            </View>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
     </Modal>
   );
 };
@@ -439,5 +573,62 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 15, 30, 0.98)',
+    justifyContent: 'center',
+  },
+  viewerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  viewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 15,
+    zIndex: 10,
+    backgroundColor: 'rgba(10, 15, 30, 0.85)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  viewerTitleContainer: {
+    flex: 1,
+    marginRight: 15,
+  },
+  viewerTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  viewerSubtitle: {
+    color: '#94A3B8',
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  viewerCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  viewerImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height - 180,
   },
 });
